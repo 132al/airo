@@ -3,12 +3,21 @@ data/
 *.zip
 *.parquet
 *.sqlite3
+*.pkl
+
 # Python
 __pycache__/
 *.pyc
 .venv/
 venv/
-
-# 环境配置
-.env
-*.pkl
+*.pyo
+env/
+# Qdrant 数据库
+embeat_qdrant_database*/
+# Django
+db.sqlite3
+*.log
+# IDE
+.idea/
+.vscode/
+*.swp

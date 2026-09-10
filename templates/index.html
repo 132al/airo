@@ -93,6 +93,7 @@
             border: 1px solid var(--border-subtle);
         }
 
+        /* 🆕 双输入框布局 */
         .search-row {
             display: flex;
             gap: 12px;
@@ -101,7 +102,7 @@
         }
         .search-row input {
             flex: 1;
-            min-width: 200px;
+            min-width: 160px;
             padding: 14px 20px;
             border-radius: var(--radius-pill);
             border: 1px solid var(--border-subtle);
@@ -128,6 +129,7 @@
             font-weight: 600;
             cursor: pointer;
             transition: var(--transition);
+            flex-shrink: 0;
         }
         .search-row button:hover {
             transform: scale(1.02);
@@ -156,113 +158,6 @@
             border-color: var(--frosted-blue);
         }
 
-        /* ===== 权重面板 ===== */
-        .weight-panel {
-            background: var(--bg-surface);
-            border-radius: var(--radius-card);
-            border: 1px solid var(--border-subtle);
-            padding: 16px 20px;
-            margin-bottom: 16px;
-        }
-        .weight-panel .toggle-btn {
-            background: none;
-            border: none;
-            color: var(--text-secondary);
-            font-size: 13px;
-            cursor: pointer;
-            padding: 4px 0;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-family: inherit;
-        }
-        .weight-panel .toggle-btn:hover {
-            color: var(--text-primary);
-        }
-        .weight-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 6px 16px;
-            margin-top: 12px;
-        }
-        .weight-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-        .weight-item label {
-            min-width: 72px;
-            font-weight: 500;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-            color: var(--text-muted);
-        }
-        .weight-item input[type="range"] {
-            flex: 1;
-            accent-color: var(--frosted-blue);
-            background: transparent;
-            cursor: pointer;
-            height: 4px;
-            border-radius: 2px;
-            background: rgba(255,255,255,0.1);
-            -webkit-appearance: none;
-        }
-        .weight-item input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            background: var(--frosted-blue);
-            cursor: pointer;
-        }
-        .weight-item .weight-value {
-            min-width: 32px;
-            text-align: right;
-            font-size: 12px;
-            color: var(--text-primary);
-            font-weight: 500;
-        }
-        .weight-panel .apply-btn {
-            margin-top: 12px;
-            padding: 8px 24px;
-            border: none;
-            border-radius: var(--radius-pill);
-            background: var(--frosted-blue);
-            color: var(--oxford-navy);
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-        .weight-panel .apply-btn:hover {
-            transform: scale(1.02);
-            opacity: 0.9;
-        }
-        .weight-panel .reset-btn {
-            margin-left: 8px;
-            padding: 8px 16px;
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-pill);
-            background: transparent;
-            color: var(--text-muted);
-            font-size: 13px;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-        .weight-panel .reset-btn:hover {
-            color: var(--text-primary);
-            border-color: var(--text-muted);
-        }
-        .weight-panel .collapsed .weight-grid,
-        .weight-panel .collapsed .apply-btn,
-        .weight-panel .collapsed .reset-btn {
-            display: none;
-        }
-
-        /* ===== 结果区域 ===== */
         .recommendation-area {
             background: rgba(255, 255, 255, 0.02);
             border-radius: var(--radius-card);
@@ -365,6 +260,15 @@
             margin-left: 12px;
         }
 
+        .seed-info {
+            margin-top: 10px;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-align: right;
+            border-top: 1px solid var(--border-subtle);
+            padding-top: 8px;
+        }
+
         .loading-text {
             color: var(--text-muted);
             text-align: center;
@@ -395,7 +299,6 @@
             .search-row { flex-direction: column; }
             .search-row input { width: 100%; }
             .search-row button { justify-content: center; }
-            .weight-grid { grid-template-columns: 1fr; }
             .recommendation-area { padding: 16px; }
             .result-item { flex-wrap: wrap; gap: 4px; }
             .result-item .score { margin-left: auto; }
@@ -407,37 +310,24 @@
 
         <header class="header">
             <div class="brand">
-                <h1></h1>
+                <h1>真值推荐 <span>· 音乐探索</span></h1>
             </div>
-            <div class="stats">45M 曲库</div>
+            <div class="stats">12M 曲库</div>
         </header>
 
+        <!-- 🆕 双输入框 -->
         <div class="search-row">
-            <input id="searchInput" type="text" placeholder="输入歌曲名" />
+            <input id="trackInput" type="text" placeholder="歌曲名，如 Shape of You" />
+            <input id="artistInput" type="text" placeholder="歌手（可选）" />
             <button onclick="startRecommend()">探索</button>
         </div>
         <div class="quick-chips">
-            <span onclick="quickSearch('Die With A Smile')">Die With A Smile</span>
-            <span onclick="quickSearch('Shape of You')">Shape of You</span>
-            <span onclick="quickSearch('Bohemian Rhapsody')">Bohemian Rhapsody</span>
-            <span onclick="quickSearch('Blinding Lights')">Blinding Lights</span>
+            <span onclick="quickSearch('Shape of You', 'Ed Sheeran')">Shape of You</span>
+            <span onclick="quickSearch('Blinding Lights', 'The Weeknd')">Blinding Lights</span>
+            <span onclick="quickSearch('Bohemian Rhapsody', 'Queen')">Bohemian Rhapsody</span>
+            <span onclick="quickSearch('Die With A Smile', 'Lady Gaga')">Die With A Smile</span>
         </div>
 
-        <!-- 权重面板 -->
-        <div class="weight-panel" id="weightPanel">
-            <button class="toggle-btn" onclick="toggleWeights()">
-                <span id="weightToggleIcon">▶</span> 特征权重
-            </button>
-            <div id="weightContent">
-                <div class="weight-grid" id="weightGrid"></div>
-                <div style="margin-top:12px;">
-                    <button class="apply-btn" onclick="applyWeights()">应用权重并搜索</button>
-                    <button class="reset-btn" onclick="resetWeights()">重置</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- 结果区域 -->
         <div class="recommendation-area" id="mainArea">
             <div class="placeholder">
                 <div class="icon">♫</div>
@@ -448,100 +338,29 @@
     </div>
 
     <script>
-        // ===== 特征名称 =====
-        const FEATURES = [
-            'danceability', 'energy', 'key', 'mode', 'loudness',
-            'speechiness', 'acousticness', 'instrumentalness',
-            'liveness', 'valence', 'tempo', 'time_signature'
-        ];
-
-        // ===== 权重状态 =====
-        let currentWeights = {};
-        let weightCollapsed = false;
-
-        // ===== 初始化权重滑块 =====
-        function initWeights() {
-            const grid = document.getElementById('weightGrid');
-            grid.innerHTML = '';
-            FEATURES.forEach((name) => {
-                const defaultWeight = name === 'tempo' ? 0.5 :
-                                     ['key', 'mode', 'time_signature'].includes(name) ? 0.8 : 1.0;
-                currentWeights[name] = defaultWeight;
-                const div = document.createElement('div');
-                div.className = 'weight-item';
-                div.innerHTML = `
-                    <label>${name}</label>
-                    <input type="range" min="0" max="2" step="0.05" value="${defaultWeight}"
-                           data-feature="${name}" oninput="updateWeight(this)" />
-                    <span class="weight-value" id="wval_${name}">${defaultWeight.toFixed(2)}</span>
-                `;
-                grid.appendChild(div);
-            });
-        }
-
-        function updateWeight(slider) {
-            const name = slider.dataset.feature;
-            const val = parseFloat(slider.value);
-            currentWeights[name] = val;
-            document.getElementById(`wval_${name}`).textContent = val.toFixed(2);
-        }
-
-        function getWeightVector() {
-            return FEATURES.map(name => currentWeights[name] || 1.0);
-        }
-
-        function toggleWeights() {
-            weightCollapsed = !weightCollapsed;
-            const content = document.getElementById('weightContent');
-            const icon = document.getElementById('weightToggleIcon');
-            if (weightCollapsed) {
-                content.style.display = 'none';
-                icon.textContent = '▶';
-            } else {
-                content.style.display = 'block';
-                icon.textContent = '▼';
-            }
-        }
-
-        function resetWeights() {
-            FEATURES.forEach((name) => {
-                const defaultWeight = name === 'tempo' ? 0.5 :
-                                     ['key', 'mode', 'time_signature'].includes(name) ? 0.8 : 1.0;
-                currentWeights[name] = defaultWeight;
-                const slider = document.querySelector(`input[data-feature="${name}"]`);
-                if (slider) {
-                    slider.value = defaultWeight;
-                }
-                const valEl = document.getElementById(`wval_${name}`);
-                if (valEl) valEl.textContent = defaultWeight.toFixed(2);
-            });
-        }
-
-        // ===== 推荐核心 =====
         function startRecommend() {
-            const input = document.getElementById('searchInput');
-            const q = input.value.trim();
-            if (!q) { alert('请输入歌曲名'); return; }
-            doRecommend(q);
+            const track = document.getElementById('trackInput').value.trim();
+            const artist = document.getElementById('artistInput').value.trim();
+            if (!track) { alert('请输入歌曲名'); return; }
+            doRecommend(track, artist);
         }
 
-        function quickSearch(song) {
-            document.getElementById('searchInput').value = song;
-            doRecommend(song);
+        function quickSearch(track, artist) {
+            document.getElementById('trackInput').value = track;
+            document.getElementById('artistInput').value = artist || '';
+            doRecommend(track, artist || '');
         }
 
-        function applyWeights() {
-            startRecommend();
-        }
-
-        function doRecommend(query) {
+        function doRecommend(track, artist) {
             const container = document.getElementById('mainArea');
             container.innerHTML = `<div class="loading-text"><span class="spinner"></span>搜索中...</div>`;
 
-            const weights = getWeightVector();
-            const weightsParam = weights.map(w => w.toFixed(2)).join(',');
+            let url = `/api/recommend/?q=${encodeURIComponent(track)}&top_k=20`;
+            if (artist) {
+                url += `&artist=${encodeURIComponent(artist)}`;
+            }
 
-            fetch(`/api/recommend/?q=${encodeURIComponent(query)}&top_k=20&weights=${weightsParam}`)
+            fetch(url)
                 .then(res => {
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     return res.json();
@@ -555,7 +374,7 @@
                         container.innerHTML = '<div class="placeholder"><div class="icon">😕</div><p>没有找到相似歌曲</p></div>';
                         return;
                     }
-                    renderResults(container, data.results, query, weights);
+                    renderResults(container, data.results, track, data.seed);
                 })
                 .catch(err => {
                     container.innerHTML = `<div class="error-text">❌ 请求失败: ${err.message}</div>`;
@@ -563,7 +382,7 @@
                 });
         }
 
-        function renderResults(container, results, query, weights) {
+        function renderResults(container, results, query, seed) {
             let html = `
                 <div class="result-header">
                     <span>与《${escapeHtml(query)}》相似的歌曲</span>
@@ -588,12 +407,15 @@
                 `;
             });
 
-            html += `
-                </div>
-                <div style="margin-top:10px;font-size:11px;color:var(--text-muted);text-align:right;border-top:1px solid var(--border-subtle);padding-top:8px;">
-                    权重: ${weights.map((w, i) => `${FEATURES[i]}=${w.toFixed(2)}`).join(' ')}
-                </div>
-            `;
+            html += `</div>`;
+            if (seed) {
+                html += `
+                    <div class="seed-info">
+                        种子: ${escapeHtml(seed.track_name)} - ${escapeHtml(seed.artist_name)}
+                        (流派: ${escapeHtml(seed.artist_genres)})
+                    </div>
+                `;
+            }
             container.innerHTML = html;
         }
 
@@ -604,13 +426,14 @@
             return d.innerHTML;
         }
 
-        // ===== 初始化 =====
         document.addEventListener('DOMContentLoaded', () => {
-            initWeights();
-            document.getElementById('searchInput').addEventListener('keydown', (e) => {
+            document.getElementById('trackInput').addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') startRecommend();
             });
-            document.getElementById('searchInput').focus();
+            document.getElementById('artistInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') startRecommend();
+            });
+            document.getElementById('trackInput').focus();
         });
     </script>
 </body>

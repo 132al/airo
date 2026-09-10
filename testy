@@ -1,36 +1,15 @@
-import requests
-import math
+# test_meting.py
+from webtest.meting_client import search_netease, enrich_results_with_netease
 
-QDRANT_URL = "http://localhost:6333"
-COLLECTION_NAME = "spotify_songs_test"
+# 单曲测试
+info = search_netease("Shape of You", "Ed Sheeran")
+print(f"单曲结果: {info}")
 
-# 随机取100条，计算两两之间的平均距离
-def check_vector_quality():
-    # 取100条向量
-    resp = requests.post(
-        f"{QDRANT_URL}/collections/{COLLECTION_NAME}/points/scroll",
-        json={"limit": 100, "with_vector": True, "with_payload": False}
-    )
-    points = resp.json()['result']['points']
-    vectors = [p['vector'] for p in points]
-    
-    # 计算平均余弦相似度
-    total = 0
-    count = 0
-    for i in range(len(vectors)):
-        for j in range(i+1, len(vectors)):
-            v1 = vectors[i]
-            v2 = vectors[j]
-            dot = sum(a*b for a,b in zip(v1,v2))
-            n1 = math.sqrt(sum(a*a for a in v1))
-            n2 = math.sqrt(sum(b*b for b in v2))
-            if n1 > 0 and n2 > 0:
-                sim = dot / (n1 * n2)
-                total += sim
-                count += 1
-    
-    avg_sim = total / count if count > 0 else 0
-    print(f"平均余弦相似度: {avg_sim:.4f}")
-    print(f"如果 > 0.9，说明向量空间严重塌缩")
-
-check_vector_quality()
+# 批量测试
+results = [
+    {"track_name": "Shape of You", "artist_name": "Ed Sheeran"},
+    {"track_name": "Blinding Lights", "artist_name": "The Weeknd"},
+]
+enriched = enrich_results_with_netease(results)
+for item in enriched:
+    print(f"{item['track_name']}: {item.get('cover_url', '')[:50]}...")

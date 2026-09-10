@@ -19,7 +19,40 @@ embeat = EmbeatSimilar(
     qdrant_url="http://127.0.0.1:6333",
     collection_name="spotify_tracks",
 )
+# webtest/views.py 里新增
 
+@csrf_exempt
+def reason_api(request):
+    """为单首歌生成理由"""
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        seed_track = data.get("seed_track", "")
+        seed_artist = data.get("seed_artist", "")
+        seed_genres = data.get("seed_genres", "")
+
+        rec_track = data.get("track_name", "")
+        rec_artist = data.get("artist_name", "")
+        rec_genres = data.get("artist_genres", "")
+        sim = float(data.get("similarity", 0))
+        print(f"[reason_api] 种子: {seed_track} - {seed_artist} | 推荐: {rec_track} - {rec_artist} (流派: {rec_genres})")
+        # 生成单曲理由
+        from webtest.reason_generator import generate_song_reason
+        reason = generate_song_reason(
+            seed_track=seed_track,
+            seed_artist=seed_artist,
+            seed_genres=seed_genres,
+            rec_track=rec_track,
+            rec_artist=rec_artist,
+            rec_genres=rec_genres,
+            similarity=sim,
+        )
+
+        return JsonResponse({"reason": reason})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)
 
 def safe_get(data, *keys, default=None):
     for key in keys:
@@ -80,11 +113,8 @@ def recommend_api(request):
     # 为推荐结果补充网易云跳转链接
     if "results" in result and result["results"]:
         result["results"] = enrich_results_with_netease(result["results"])
-        reason = generate_recommend_reason(
-            seed=result.get("seed", {}),
-            results=result["results"],
-        )   
-        result["reason"] = reason
+       
+        result["reason"] = ""
     return JsonResponse(result)
 
 

@@ -3,7 +3,6 @@
 from webtest.ollama_client import client
 
 
-# 流派中文映射（可选，让理由更自然）
 GENRE_CN = {
     "pop": "流行",
     "rock": "摇滚",
@@ -32,7 +31,40 @@ GENRE_CN = {
     "brostep": "回响贝斯",
     "dubstep": "回响贝斯",
 }
+def generate_song_reason(
+    seed_track: str,
+    seed_artist: str,
+    seed_genres: str,
+    rec_track: str,
+    rec_artist: str,
+    rec_genres: str,
+    similarity: float,
+) -> str:
+    """为单首推荐歌曲生成理由"""
+    seed_genres_cn = _translate_genres(seed_genres)
+    rec_genres_cn = _translate_genres(rec_genres)
 
+    prompt = f"""用户喜欢《{seed_track}》- {seed_artist}（流派：{seed_genres_cn}），
+系统推荐了《{rec_track}》- {rec_artist}（流派：{rec_genres_cn}，相似度：{similarity:.1%}）。
+
+请用一段简洁自然的中文（50-80字）说明为什么推荐这首歌，要求：
+1. 突出两首歌在音乐风格、编曲特点、情感表达上的共性
+2. 具体描述推荐歌曲的音乐特征，而不是只说"相似"
+3. 不要重复歌名
+
+直接输出理由，不要加任何前缀。"""
+
+    try:
+        reason = client.generate(
+            prompt=prompt,
+            max_tokens=800,
+            temperature=0.7,
+        )
+        if reason:
+            return reason.strip()
+    except Exception as e:
+        print(f"[单曲理由] 生成失败: {e}")
+    return ""
 
 def _translate_genres(genres: str) -> str:
     """把英文流派翻译成中文（部分翻译，保留原文）"""
@@ -50,16 +82,6 @@ def _translate_genres(genres: str) -> str:
 
 
 def generate_recommend_reason(seed: dict, results: list) -> str:
-    """
-    用大模型生成推荐理由
-
-    Args:
-        seed: 种子歌曲 dict（含 track_name, artist_name, artist_genres）
-        results: 推荐结果列表（含 track_name, artist_name, artist_genres, similarity）
-
-    Returns:
-        推荐理由字符串
-    """
     if not results:
         return ""
 
@@ -67,12 +89,12 @@ def generate_recommend_reason(seed: dict, results: list) -> str:
     seed_artist = seed.get("artist_name", "")
     seed_genres = _translate_genres(seed.get("artist_genres", ""))
 
-    # 只取前 8 首，避免 prompt 太长
+    # 推荐列表
     top_results = results[:8]
     result_lines = []
     for i, r in enumerate(top_results, 1):
-        genres = _translate_genres(r.get("artist_genres", ""))
         sim = r.get("similarity", 0) * 100
+        genres = _translate_genres(r.get("artist_genres", ""))
         result_lines.append(
             f"{i}. 《{r.get('track_name', '')}》- {r.get('artist_name', '')}"
             f"（流派：{genres or '未知'}，相似度：{sim:.1f}%）"
@@ -84,6 +106,12 @@ def generate_recommend_reason(seed: dict, results: list) -> str:
 {results_text}
 
 请用一段简洁自然的中文（80-120字），概括性地解释这些推荐歌曲与种子歌曲的共同音乐特点。不要逐首介绍，也不要重复歌名，直接说明推荐逻辑。"""
+
+    print("\n" + "=" * 70)
+    print("🤖 发给 LLM 的完整 Prompt")
+    print("=" * 70)
+    print(prompt)
+    print("=" * 70 + "\n")
 
     try:
         reason = client.generate(

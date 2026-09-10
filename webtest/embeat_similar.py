@@ -138,104 +138,120 @@ class EmbeatSimilar:
         return results
 
     # ========== 3. 过滤候选 ==========
-    def filter_candidates(
-        self,
-        seed_payload: dict,
-        candidates: list,
-        top_k: int = 20,
-    ):
-        """
-        过滤候选（对应官方 filter_similar_candidates）
-        
-        过滤规则：
-        - 跳过自己
-        - 跳过同名同歌手
-        - 跳过重复歌名
-        - 跳过 remix
-        - 跳过低流行度
-        - 跳过流派不匹配
-        - 同歌手最多 15%
-        """
-        result = []
-        result_track_names = []
+    def _genres_set(self, genre_str):
+        """把 'uk pop, pop' 转成 {'uk pop', 'pop'}"""
+        if not genre_str:
+            return set()
+        return {g.strip().lower() for g in genre_str.split(",") if g.strip()}
 
+
+    def filter_candidates(self, seed_payload, candidates, top_k=20):
+        """
+        过滤候选：
+        - 种子有流派：要求候选流派有交集，idx 相同加高分
+        - 种子无流派：不做流派过滤，不做流派加分
+        """
         seed_track_name = str(seed_payload.get("track_name") or "").lower().split(" (")[0].split(" - ")[0].strip()
         seed_artist_name = str(seed_payload.get("artist_name") or "").lower().strip()
-        seed_artist_genre_idx = int(seed_payload.get("artist_genre_idx") or 0)
+        seed_genre_str = seed_payload.get("artist_genres", "")
+        seed_genre_idx = int(seed_payload.get("artist_genre_idx") or 0)
         seed_popularity = float(seed_payload.get("popularity") or 0.0)
         seed_track_id = str(seed_payload.get("track_id") or "")
 
-        # 最小流行度（官方逻辑：min(种子流行度, 0.1)）
-        min_popularity = min(seed_popularity, 0.1)
+        seed_genres_set = self._genres_set(seed_genre_str)
+        # 🆕 种子流派为空的标志
+        seed_has_genre = bool(seed_genres_set) or seed_genre_idx > 0
 
-        # 同歌手最大数量（15%）
+        print(f"[过滤] 种子流派: {seed_genre_str or '（空）'}")
+        print(f"[过滤] 种子流派 idx: {seed_genre_idx}")
+        print(f"[过滤] 是否启用流派过滤: {seed_has_genre}")
+
+        min_popularity = min(seed_popularity, 0.1)
         same_artist_ratio = 0.15
         max_same_artist = max(1, int(top_k * same_artist_ratio))
         same_artist_counter = 0
 
-        prev_similarity = 1.0
-        similarity_eps = 1e-5
+        candidates_scored = []
 
         for candidate in candidates:
             payload = candidate.payload or {}
-
             payload_track_id = str(payload.get("track_id") or "").strip()
             payload_track_name = str(payload.get("track_name") or "").lower().split(" (")[0].split(" - ")[0].strip()
             payload_artist_name = str(payload.get("artist_name") or "").lower().strip()
-            payload_artist_genre_idx = int(payload.get("artist_genre_idx") or 0)
+            payload_genre_str = payload.get("artist_genres", "")
+            payload_genre_idx = int(payload.get("artist_genre_idx") or 0)
             payload_popularity = float(payload.get("popularity") or 0.0)
             payload_similarity = float(candidate.score)
 
-            # --- 过滤规则 ---
+            # --- 基础过滤 ---
             if not payload_track_id or not payload_track_name:
                 continue
             if payload_track_id == seed_track_id:
                 continue
             if payload_track_name == seed_track_name and payload_artist_name == seed_artist_name:
                 continue
-            if payload_track_name in result_track_names:
-                continue
-            if f"{seed_track_name} " in payload_track_name:
-                continue
             if "remix" in payload_track_name:
                 continue
             if payload_popularity < min_popularity:
                 continue
 
-            # 流派过滤
-            if seed_artist_genre_idx > 0 and payload_artist_genre_idx != seed_artist_genre_idx:
-                continue
-            # 跳过未知流派
-            if payload_artist_genre_idx == 0:
-                continue
+            # ===== 🆕 流派交集入围（仅当种子有流派时才启用） =====
+            payload_genres_set = self._genres_set(payload_genre_str)
 
-            # 同歌手限制
-            if same_artist_counter >= max_same_artist and payload_artist_name == seed_artist_name:
-                continue
-
-            # 相似度去重（避免连续相同分数）
-            if abs(payload_similarity - prev_similarity) < similarity_eps:
-                if result and payload_popularity > float(result[-1].get("popularity") or 0.0):
-                    result.pop(-1)
+            if seed_has_genre:
+                # 种子有流派：要求候选必须有交集
+                if payload_genres_set:
+                    common = seed_genres_set & payload_genres_set
+                    if not common:
+                        continue  # 无交集，直接淘汰
                 else:
+                    # 候选流派为空，且种子有流派 → 淘汰
                     continue
 
-            result.append({
+            # ===== 🆕 流派加分（仅当种子有流派时才启用） =====
+            genre_bonus = 0.0
+            if seed_has_genre:
+                if seed_genre_idx > 0 and payload_genre_idx == seed_genre_idx:
+                    # idx 完全相同，+15%
+                    genre_bonus += 0.15
+                elif seed_genres_set and payload_genres_set:
+                    # 按交集数量加分（每个 +3%，最多 3 个）
+                    common_count = len(seed_genres_set & payload_genres_set)
+                    genre_bonus += min(common_count, 3) * 0.03
+
+            final_score = payload_similarity + genre_bonus
+
+            candidates_scored.append({
                 "track_id": payload_track_id,
                 "track_name": payload.get("track_name", ""),
                 "artist_name": payload.get("artist_name", ""),
                 "album_name": payload.get("album_name", ""),
-                "artist_genres": payload.get("artist_genres", ""),
+                "artist_genres": payload_genre_str,
+                "artist_genre_idx": payload_genre_idx,
                 "popularity": payload_popularity,
                 "similarity": round(payload_similarity, 4),
+                "genre_bonus": round(genre_bonus, 4),
+                "final_score": round(final_score, 4),
+                "payload_track_name": payload_track_name,
+                "payload_artist_name": payload_artist_name,
             })
-            result_track_names.append(payload_track_name)
 
-            if payload_artist_name == seed_artist_name:
+        # 按最终分数排序
+        candidates_scored.sort(key=lambda x: x["final_score"], reverse=True)
+
+        # 去重 + 同歌手限制
+        result = []
+        result_track_names = set()
+        for item in candidates_scored:
+            if item["payload_track_name"] in result_track_names:
+                continue
+            if item["payload_artist_name"] == seed_artist_name:
+                if same_artist_counter >= max_same_artist:
+                    continue
                 same_artist_counter += 1
 
-            prev_similarity = payload_similarity
-
+            result_track_names.add(item["payload_track_name"])
+            result.append(item)
             if len(result) >= top_k:
                 break
 

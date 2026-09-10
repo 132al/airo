@@ -78,10 +78,10 @@ DATABASES = {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     },
-    'music_db': {  
+    'music': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'data/music.db',  
-    }
+        'NAME': r'F:\airo\aipro\data\music.db',
+    },
 }
 
 

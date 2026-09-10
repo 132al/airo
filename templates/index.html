@@ -200,6 +200,11 @@
             font-size: 13px;
             color: var(--text-secondary);
             line-height: 1.6;
+            min-height: 44px;
+        }
+        .reason-box .reason-loading {
+            color: var(--text-muted);
+            font-style: italic;
         }
 
         /* ===== 单曲卡片 ===== */
@@ -374,11 +379,10 @@
 
     <script>
         // 全局状态
-       let currentResults = [];
+        let currentResults = [];
         let currentIndex = 0;
         let currentQuery = '';
         let currentSeed = null;
-        let currentReason = '';  
 
         function startRecommend() {
             const track = document.getElementById('trackInput').value.trim();
@@ -409,11 +413,11 @@
                 })
                 .then(data => {
                     if (data.error) {
-                        container.innerHTML = `<div class="error-text">❌ ${data.error}</div>`;
+                        container.innerHTML = `<div class="error-text">${escapeHtml(data.error)}</div>`;
                         return;
                     }
                     if (!data.results || data.results.length === 0) {
-                        container.innerHTML = '<div class="placeholder"><div class="icon">😕</div><p>没有找到相似歌曲</p></div>';
+                        container.innerHTML = '<div class="placeholder"><div class="icon">♫</div><p>没有找到相似歌曲</p></div>';
                         return;
                     }
                     // 保存状态
@@ -421,11 +425,14 @@
                     currentIndex = 0;
                     currentQuery = track;
                     currentSeed = data.seed;
-                    currentReason = data.reason || '';  // 🆕
+
+                    // 为每首歌初始化理由字段
+                    currentResults.forEach(r => { r._reason = ''; });
+
                     renderSong(container);
                 })
                 .catch(err => {
-                    container.innerHTML = `<div class="error-text">❌ 请求失败: ${err.message}</div>`;
+                    container.innerHTML = `<div class="error-text">请求失败: ${escapeHtml(err.message)}</div>`;
                     console.error(err);
                 });
         }
@@ -449,17 +456,20 @@
                 ? `<a class="song-link" href="${escapeHtml(neteaseUrl)}" target="_blank" rel="noopener">${cardContent}</a>`
                 : `<div class="song-link">${cardContent}</div>`;
 
-            // 🆕 推荐理由
-            const reasonHtml = currentReason
-                ? `<div class="reason-box">💡 ${escapeHtml(currentReason)}</div>`
-                : '';
+            // 理由框：如果已有理由，直接显示；否则显示加载中
+            let reasonInner = '';
+            if (item._reason) {
+                reasonInner = escapeHtml(item._reason);
+            } else {
+                reasonInner = '<span class="reason-loading">正在生成推荐理由...</span>';
+            }
 
             let html = `
                 <div class="result-header">
                     <span>与《${escapeHtml(currentQuery)}》相似的歌曲</span>
                     <span>${currentIndex + 1} / ${total}</span>
                 </div>
-                ${reasonHtml}
+                <div class="reason-box" id="reasonBox">${reasonInner}</div>
                 <div class="song-card">${cardHtml}</div>
                 <div class="pager">
                     <button onclick="prevSong()" ${currentIndex === 0 ? 'disabled' : ''}>‹</button>
@@ -478,6 +488,58 @@
             }
 
             container.innerHTML = html;
+
+            // 如果当前歌还没有理由，异步请求
+            if (!item._reason) {
+                loadReasonForCurrentSong();
+            }
+        }
+
+        function loadReasonForCurrentSong() {
+            const item = currentResults[currentIndex];
+            if (!item) return;
+            if (item._reason) return;  // 已缓存
+            if (item._loading) return; // 正在加载
+            item._loading = true;
+
+            fetch('/api/reason/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    seed_track: currentQuery,
+                    seed_artist: currentSeed ? currentSeed.artist_name : '',
+                    seed_genres: currentSeed ? currentSeed.artist_genres : '',
+                    track_name: item.track_name,
+                    artist_name: item.artist_name,
+                    artist_genres: item.artist_genres,
+                    similarity: item.similarity,
+                }),
+            })
+            .then(res => res.json())
+            .then(data => {
+                item._loading = false;
+                if (data.reason) {
+                    item._reason = data.reason;
+                    // 如果用户还停在这首歌，更新理由框
+                    const box = document.getElementById('reasonBox');
+                    if (box && currentResults[currentIndex] === item) {
+                        box.innerHTML = escapeHtml(data.reason);
+                    }
+                } else {
+                    const box = document.getElementById('reasonBox');
+                    if (box && currentResults[currentIndex] === item) {
+                        box.innerHTML = '';
+                    }
+                }
+            })
+            .catch(err => {
+                item._loading = false;
+                console.error('理由加载失败:', err);
+                const box = document.getElementById('reasonBox');
+                if (box && currentResults[currentIndex] === item) {
+                    box.innerHTML = '';
+                }
+            });
         }
 
         function prevSong() {

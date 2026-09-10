@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>真值推荐 · 音乐探索</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --punch-red: #e63946ff;
+            --honeydew: #f1faeeff;
+            --frosted-blue: #a8dadcff;
+            --cerulean: #457b9dff;
+            --oxford-navy: #1d3557ff;
+            --bg-deep: var(--oxford-navy);
+            --bg-surface: #1f2f4a;
+            --bg-card: rgba(255, 255, 255, 0.04);
+            --bg-card-hover: rgba(255, 255, 255, 0.08);
+            --border-subtle: rgba(255, 255, 255, 0.06);
+            --text-primary: var(--honeydew);
+            --text-secondary: rgba(241, 250, 238, 0.70);
+            --text-muted: rgba(241, 250, 238, 0.35);
+            --accent: var(--punch-red);
+            --accent-glow: rgba(230, 57, 70, 0.20);
+            --radius-card: 16px;
+            --radius-pill: 60px;
+            --transition: 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            position: relative;
+            overflow-x: hidden;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background-image:
+                radial-gradient(circle at 20px 20px, rgba(168, 218, 220, 0.10) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+        }
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse at 15% 15%, rgba(230, 57, 70, 0.12) 0%, transparent 50%),
+                radial-gradient(ellipse at 85% 85%, rgba(69, 123, 157, 0.14) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        .app {
+            max-width: 720px;
+            width: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .brand h1 {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: -0.3px;
+        }
+        .brand h1 span {
+            color: var(--frosted-blue);
+            font-weight: 300;
+        }
+        .stats {
+            font-size: 12px;
+            color: var(--text-muted);
+            background: var(--bg-card);
+            padding: 4px 14px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .search-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .search-row input {
+            flex: 1;
+            min-width: 200px;
+            padding: 14px 20px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border-subtle);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-primary);
+            font-size: 15px;
+            outline: none;
+            transition: var(--transition);
+        }
+        .search-row input::placeholder {
+            color: var(--text-muted);
+        }
+        .search-row input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px var(--accent-glow);
+        }
+        .search-row button {
+            padding: 14px 32px;
+            border: none;
+            border-radius: var(--radius-pill);
+            background: var(--accent);
+            color: var(--honeydew);
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .search-row button:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+
+        .quick-chips {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .quick-chips span {
+            padding: 6px 16px;
+            border-radius: var(--radius-pill);
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            font-size: 13px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .quick-chips span:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+            border-color: var(--frosted-blue);
+        }
+
+        /* ===== 权重面板 ===== */
+        .weight-panel {
+            background: var(--bg-surface);
+            border-radius: var(--radius-card);
+            border: 1px solid var(--border-subtle);
+            padding: 16px 20px;
+            margin-bottom: 16px;
+        }
+        .weight-panel .toggle-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 13px;
+            cursor: pointer;
+            padding: 4px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: inherit;
+        }
+        .weight-panel .toggle-btn:hover {
+            color: var(--text-primary);
+        }
+        .weight-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px 16px;
+            margin-top: 12px;
+        }
+        .weight-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .weight-item label {
+            min-width: 72px;
+            font-weight: 500;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            color: var(--text-muted);
+        }
+        .weight-item input[type="range"] {
+            flex: 1;
+            accent-color: var(--frosted-blue);
+            background: transparent;
+            cursor: pointer;
+            height: 4px;
+            border-radius: 2px;
+            background: rgba(255,255,255,0.1);
+            -webkit-appearance: none;
+        }
+        .weight-item input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--frosted-blue);
+            cursor: pointer;
+        }
+        .weight-item .weight-value {
+            min-width: 32px;
+            text-align: right;
+            font-size: 12px;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+        .weight-panel .apply-btn {
+            margin-top: 12px;
+            padding: 8px 24px;
+            border: none;
+            border-radius: var(--radius-pill);
+            background: var(--frosted-blue);
+            color: var(--oxford-navy);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .weight-panel .apply-btn:hover {
+            transform: scale(1.02);
+            opacity: 0.9;
+        }
+        .weight-panel .reset-btn {
+            margin-left: 8px;
+            padding: 8px 16px;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-pill);
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 13px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .weight-panel .reset-btn:hover {
+            color: var(--text-primary);
+            border-color: var(--text-muted);
+        }
+        .weight-panel .collapsed .weight-grid,
+        .weight-panel .collapsed .apply-btn,
+        .weight-panel .collapsed .reset-btn {
+            display: none;
+        }
+
+        /* ===== 结果区域 ===== */
+        .recommendation-area {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: var(--radius-card);
+            border: 1px solid var(--border-subtle);
+            padding: 20px 24px 24px;
+            min-height: 200px;
+            transition: var(--transition);
+            position: relative;
+            backdrop-filter: blur(2px);
+        }
+        .recommendation-area .placeholder {
+            color: var(--text-muted);
+            text-align: center;
+            padding: 30px 0;
+        }
+        .recommendation-area .placeholder .icon {
+            font-size: 36px;
+            margin-bottom: 10px;
+            opacity: 0.25;
+        }
+        .recommendation-area .placeholder p {
+            font-size: 15px;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        .result-scroll {
+            max-height: 380px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        .result-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        .result-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .result-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.15);
+            border-radius: 4px;
+        }
+
+        .result-item {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            padding: 10px 14px;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: 0.2s;
+            border: 1px solid transparent;
+        }
+        .result-item:hover {
+            border-color: rgba(168, 218, 220, 0.15);
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .result-item .info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            flex: 1;
+        }
+        .result-item .rank {
+            color: var(--text-muted);
+            font-size: 12px;
+            font-weight: 500;
+            min-width: 28px;
+        }
+        .result-item .name-artist {
+            overflow: hidden;
+        }
+        .result-item .track-name {
+            font-weight: 500;
+            color: var(--text-primary);
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .result-item .artist-name {
+            color: var(--text-secondary);
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .result-item .score {
+            color: var(--frosted-blue);
+            font-weight: 500;
+            font-size: 13px;
+            flex-shrink: 0;
+            margin-left: 12px;
+        }
+
+        .loading-text {
+            color: var(--text-muted);
+            text-align: center;
+            padding: 30px 0;
+        }
+        .loading-text .spinner {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border-subtle);
+            border-top: 2px solid var(--frosted-blue);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .error-text {
+            color: #d48a8a;
+            text-align: center;
+            padding: 30px 0;
+        }
+
+        @media (max-width: 600px) {
+            body { padding: 16px; }
+            .header { flex-direction: column; align-items: flex-start; gap: 8px; }
+            .search-row { flex-direction: column; }
+            .search-row input { width: 100%; }
+            .search-row button { justify-content: center; }
+            .weight-grid { grid-template-columns: 1fr; }
+            .recommendation-area { padding: 16px; }
+            .result-item { flex-wrap: wrap; gap: 4px; }
+            .result-item .score { margin-left: auto; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+
+        <header class="header">
+            <div class="brand">
+                <h1></h1>
+            </div>
+            <div class="stats">45M 曲库</div>
+        </header>
+
+        <div class="search-row">
+            <input id="searchInput" type="text" placeholder="输入歌曲名" />
+            <button onclick="startRecommend()">探索</button>
+        </div>
+        <div class="quick-chips">
+            <span onclick="quickSearch('Die With A Smile')">Die With A Smile</span>
+            <span onclick="quickSearch('Shape of You')">Shape of You</span>
+            <span onclick="quickSearch('Bohemian Rhapsody')">Bohemian Rhapsody</span>
+            <span onclick="quickSearch('Blinding Lights')">Blinding Lights</span>
+        </div>
+
+        <!-- 权重面板 -->
+        <div class="weight-panel" id="weightPanel">
+            <button class="toggle-btn" onclick="toggleWeights()">
+                <span id="weightToggleIcon">▶</span> 特征权重
+            </button>
+            <div id="weightContent">
+                <div class="weight-grid" id="weightGrid"></div>
+                <div style="margin-top:12px;">
+                    <button class="apply-btn" onclick="applyWeights()">应用权重并搜索</button>
+                    <button class="reset-btn" onclick="resetWeights()">重置</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 结果区域 -->
+        <div class="recommendation-area" id="mainArea">
+            <div class="placeholder">
+                <div class="icon">♫</div>
+                <p>输入一首歌，开始探索</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ===== 特征名称 =====
+        const FEATURES = [
+            'danceability', 'energy', 'key', 'mode', 'loudness',
+            'speechiness', 'acousticness', 'instrumentalness',
+            'liveness', 'valence', 'tempo', 'time_signature'
+        ];
+
+        // ===== 权重状态 =====
+        let currentWeights = {};
+        let weightCollapsed = false;
+
+        // ===== 初始化权重滑块 =====
+        function initWeights() {
+            const grid = document.getElementById('weightGrid');
+            grid.innerHTML = '';
+            FEATURES.forEach((name) => {
+                const defaultWeight = name === 'tempo' ? 0.5 :
+                                     ['key', 'mode', 'time_signature'].includes(name) ? 0.8 : 1.0;
+                currentWeights[name] = defaultWeight;
+                const div = document.createElement('div');
+                div.className = 'weight-item';
+                div.innerHTML = `
+                    <label>${name}</label>
+                    <input type="range" min="0" max="2" step="0.05" value="${defaultWeight}"
+                           data-feature="${name}" oninput="updateWeight(this)" />
+                    <span class="weight-value" id="wval_${name}">${defaultWeight.toFixed(2)}</span>
+                `;
+                grid.appendChild(div);
+            });
+        }
+
+        function updateWeight(slider) {
+            const name = slider.dataset.feature;
+            const val = parseFloat(slider.value);
+            currentWeights[name] = val;
+            document.getElementById(`wval_${name}`).textContent = val.toFixed(2);
+        }
+
+        function getWeightVector() {
+            return FEATURES.map(name => currentWeights[name] || 1.0);
+        }
+
+        function toggleWeights() {
+            weightCollapsed = !weightCollapsed;
+            const content = document.getElementById('weightContent');
+            const icon = document.getElementById('weightToggleIcon');
+            if (weightCollapsed) {
+                content.style.display = 'none';
+                icon.textContent = '▶';
+            } else {
+                content.style.display = 'block';
+                icon.textContent = '▼';
+            }
+        }
+
+        function resetWeights() {
+            FEATURES.forEach((name) => {
+                const defaultWeight = name === 'tempo' ? 0.5 :
+                                     ['key', 'mode', 'time_signature'].includes(name) ? 0.8 : 1.0;
+                currentWeights[name] = defaultWeight;
+                const slider = document.querySelector(`input[data-feature="${name}"]`);
+                if (slider) {
+                    slider.value = defaultWeight;
+                }
+                const valEl = document.getElementById(`wval_${name}`);
+                if (valEl) valEl.textContent = defaultWeight.toFixed(2);
+            });
+        }
+
+        // ===== 推荐核心 =====
+        function startRecommend() {
+            const input = document.getElementById('searchInput');
+            const q = input.value.trim();
+            if (!q) { alert('请输入歌曲名'); return; }
+            doRecommend(q);
+        }
+
+        function quickSearch(song) {
+            document.getElementById('searchInput').value = song;
+            doRecommend(song);
+        }
+
+        function applyWeights() {
+            startRecommend();
+        }
+
+        function doRecommend(query) {
+            const container = document.getElementById('mainArea');
+            container.innerHTML = `<div class="loading-text"><span class="spinner"></span>搜索中...</div>`;
+
+            const weights = getWeightVector();
+            const weightsParam = weights.map(w => w.toFixed(2)).join(',');
+
+            fetch(`/api/recommend/?q=${encodeURIComponent(query)}&top_k=20&weights=${weightsParam}`)
+                .then(res => {
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return res.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        container.innerHTML = `<div class="error-text">❌ ${data.error}</div>`;
+                        return;
+                    }
+                    if (!data.results || data.results.length === 0) {
+                        container.innerHTML = '<div class="placeholder"><div class="icon">😕</div><p>没有找到相似歌曲</p></div>';
+                        return;
+                    }
+                    renderResults(container, data.results, query, weights);
+                })
+                .catch(err => {
+                    container.innerHTML = `<div class="error-text">❌ 请求失败: ${err.message}</div>`;
+                    console.error(err);
+                });
+        }
+
+        function renderResults(container, results, query, weights) {
+            let html = `
+                <div class="result-header">
+                    <span>与《${escapeHtml(query)}》相似的歌曲</span>
+                    <span>${results.length} 首</span>
+                </div>
+                <div class="result-scroll">
+            `;
+
+            results.forEach((item, i) => {
+                const pct = (item.similarity * 100).toFixed(1);
+                html += `
+                    <div class="result-item">
+                        <div class="info">
+                            <span class="rank">${String(i+1).padStart(2, '0')}</span>
+                            <div class="name-artist">
+                                <div class="track-name">${escapeHtml(item.track_name)}</div>
+                                <div class="artist-name">${escapeHtml(item.artist_name)}</div>
+                            </div>
+                        </div>
+                        <div class="score">${pct}%</div>
+                    </div>
+                `;
+            });
+
+            html += `
+                </div>
+                <div style="margin-top:10px;font-size:11px;color:var(--text-muted);text-align:right;border-top:1px solid var(--border-subtle);padding-top:8px;">
+                    权重: ${weights.map((w, i) => `${FEATURES[i]}=${w.toFixed(2)}`).join(' ')}
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '未知';
+            const d = document.createElement('div');
+            d.textContent = text;
+            return d.innerHTML;
+        }
+
+        // ===== 初始化 =====
+        document.addEventListener('DOMContentLoaded', () => {
+            initWeights();
+            document.getElementById('searchInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') startRecommend();
+            });
+            document.getElementById('searchInput').focus();
+        });
+    </script>
+</body>
+</html>

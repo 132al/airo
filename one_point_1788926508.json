@@ -1,0 +1,26 @@
+{
+  "id": 0,
+  "payload": {
+    "track_name": "DtMF",
+    "artist_name": "Bad Bunny",
+    "popularity": 0.9800000190734864,
+    "artist_genres": "urbano latino, trap latino, reggaeton",
+    "release_year": 2025,
+    "explicit": 1,
+    "duration_ms": 0
+  },
+  "vector": [
+    8.237362e-05,
+    -0.0024551705,
+    -0.010747717,
+    -0.0012803241,
+    0.001520671,
+    0.0014278837,
+    -0.00092064677,
+    -0.00030579505,
+    0.9994692,
+    0.030151032,
+    -0.004856247,
+    0.0002500254
+  ]
+}

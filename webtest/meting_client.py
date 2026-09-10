@@ -18,7 +18,6 @@ class MetingClient:
         self._initialize()
 
     def _start(self):
-        """启动子进程"""
         NODE_PATH = r"C:\Program Files\nodejs\node.exe"
         NPX_CLI = r"C:\Program Files\nodejs\node_modules\npm\bin\npx-cli.js"
 
@@ -44,7 +43,6 @@ class MetingClient:
         )
 
     def _send(self, method, params=None):
-        """发送 JSON-RPC 请求，返回响应"""
         with self.lock:
             self._request_id += 1
             request = {
@@ -67,7 +65,6 @@ class MetingClient:
                 return None
 
     def _initialize(self):
-        """初始化 MCP 连接"""
         self._send("initialize", {
             "protocolVersion": "2025-06-18",
             "capabilities": {},
@@ -80,12 +77,7 @@ class MetingClient:
         self.process.stdin.write(json.dumps(notification) + "\n")
         self.process.stdin.flush()
 
-    def list_tools(self):
-        """列出可用工具"""
-        return self._send("tools/list")
-
     def call_tool(self, name, arguments):
-        """调用工具"""
         return self._send("tools/call", {
             "name": name,
             "arguments": arguments,
@@ -98,7 +90,6 @@ class MetingClient:
             self.process.wait(timeout=5)
 
 
-# 全局单例
 _client = None
 _client_lock = threading.Lock()
 
@@ -126,25 +117,8 @@ def _parse_content(resp):
         return None
 
 
-def get_cover_url(song_id, size=300):
-    """获取封面 URL"""
-    try:
-        client = get_client()
-        resp = client.call_tool("pic", {
-            "platform": "netease",
-            "id": str(song_id),
-            "size": size,
-        })
-        data = _parse_content(resp)
-        if data and data.get("ok"):
-            return data.get("data", {}).get("url", "")
-    except Exception as e:
-        print(f"[Meting] 封面获取失败 {song_id}: {e}")
-    return ""
-
-
 def search_netease(track_name, artist_name=""):
-    """搜索网易云歌曲，返回封面和链接"""
+    """搜索网易云歌曲，返回跳转链接"""
     try:
         client = get_client()
         query = f"{track_name} {artist_name}".strip()
@@ -167,11 +141,8 @@ def search_netease(track_name, artist_name=""):
         if not song_id:
             return None
 
-        cover_url = get_cover_url(song_id, size=300)
-
         return {
             "netease_id": str(song_id),
-            "cover_url": cover_url,
             "netease_url": f"https://music.163.com/#/song?id={song_id}",
         }
     except Exception as e:
@@ -180,7 +151,7 @@ def search_netease(track_name, artist_name=""):
 
 
 def enrich_results_with_netease(results, max_workers=5):
-    """为推荐结果批量补充网易云信息"""
+    """为推荐结果批量补充网易云跳转链接"""
     if not results:
         return results
 
@@ -201,11 +172,9 @@ def enrich_results_with_netease(results, max_workers=5):
                 info = None
 
             if info:
-                item["cover_url"] = info["cover_url"]
                 item["netease_url"] = info["netease_url"]
                 item["netease_id"] = info["netease_id"]
             else:
-                item["cover_url"] = ""
                 item["netease_url"] = ""
                 item["netease_id"] = ""
 

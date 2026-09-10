@@ -88,7 +88,7 @@ def generate_recommend_reason(seed: dict, results: list) -> str:
     try:
         reason = client.generate(
             prompt=prompt,
-            max_tokens=200,
+            max_tokens=500,
             temperature=0.7,
         )
         if reason:

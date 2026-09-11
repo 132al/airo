@@ -118,16 +118,17 @@ def _parse_content(resp):
 
 
 def search_netease(track_name, artist_name=""):
-    """搜索网易云歌曲，返回跳转链接"""
+    """搜索网易云歌曲，返回 {netease_id, netease_url}"""
     try:
-        client = get_client()
+        cli = get_client()
         query = f"{track_name} {artist_name}".strip()
 
-        resp = client.call_tool("search", {
+        resp = cli.call_tool("search", {
             "platform": "netease",
             "keyword": query,
             "limit": 5,
         })
+
         data = _parse_content(resp)
         if not data or not data.get("ok"):
             return None
@@ -136,7 +137,21 @@ def search_netease(track_name, artist_name=""):
         if not songs:
             return None
 
-        song = songs[0]
+        # 优先找 artist 匹配的那条
+        matched = None
+        if artist_name:
+            artist_lower = artist_name.lower()
+            for song in songs:
+                song_artists = song.get("artist", [])
+                if isinstance(song_artists, list):
+                    song_artist_str = " ".join(song_artists).lower()
+                else:
+                    song_artist_str = str(song_artists).lower()
+                if artist_lower in song_artist_str:
+                    matched = song
+                    break
+
+        song = matched or songs[0]
         song_id = song.get("id")
         if not song_id:
             return None

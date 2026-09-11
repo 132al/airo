@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>登录 · AIRO</title>
+    <title>注册 · AIRO</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -164,8 +164,8 @@
 </head>
 <body>
     <div class="auth-box">
-        <h1>登录 <span>· AIRO</span></h1>
-        <p class="subtitle">输入用户名和密码</p>
+        <h1>注册 <span>· AIRO</span></h1>
+        <p class="subtitle">创建一个账号</p>
 
         {% if form.errors %}
             <div class="error-list">
@@ -186,14 +186,18 @@
                 {{ form.username }}
             </div>
             <div class="form-field">
-                <label for="{{ form.password.id_for_label }}">密码</label>
-                {{ form.password }}
+                <label for="{{ form.password1.id_for_label }}">密码</label>
+                {{ form.password1 }}
             </div>
-            <button type="submit" class="auth-btn">登录</button>
+            <div class="form-field">
+                <label for="{{ form.password2.id_for_label }}">确认密码</label>
+                {{ form.password2 }}
+            </div>
+            <button type="submit" class="auth-btn">注册</button>
         </form>
 
         <div class="auth-switch">
-            还没有账号？<a href="/register/">去注册</a>
+            已有账号？<a href="/login/">去登录</a>
         </div>
     </div>
 </body>

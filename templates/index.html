@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>真值推荐 · 音乐探索</title>
+    <title>AIRO</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -84,30 +84,55 @@
             color: var(--frosted-blue);
             font-weight: 300;
         }
-        .stats {
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .user-badge {
+            font-size: 12px;
+            color: var(--text-secondary);
+            background: var(--bg-card);
+            padding: 4px 14px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border-subtle);
+        }
+        .logout-btn {
             font-size: 12px;
             color: var(--text-muted);
             background: var(--bg-card);
             padding: 4px 14px;
             border-radius: var(--radius-pill);
             border: 1px solid var(--border-subtle);
+            text-decoration: none;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .logout-btn:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+            border-color: var(--frosted-blue);
         }
 
+        /* ===== 搜索区 ===== */
+        .search-box {
+            position: relative;
+            margin-bottom: 16px;
+        }
         .search-row {
             display: flex;
-            gap: 12px;
-            margin-bottom: 12px;
+            gap: 8px;
             flex-wrap: wrap;
         }
         .search-row input {
             flex: 1;
-            min-width: 160px;
-            padding: 14px 20px;
+            min-width: 120px;
+            padding: 10px 16px;
             border-radius: var(--radius-pill);
             border: 1px solid var(--border-subtle);
             background: rgba(255, 255, 255, 0.04);
             color: var(--text-primary);
-            font-size: 15px;
+            font-size: 14px;
             outline: none;
             transition: var(--transition);
         }
@@ -116,15 +141,15 @@
         }
         .search-row input:focus {
             border-color: var(--accent);
-            box-shadow: 0 0 0 4px var(--accent-glow);
+            box-shadow: 0 0 0 3px var(--accent-glow);
         }
         .search-row button {
-            padding: 14px 32px;
+            padding: 10px 22px;
             border: none;
             border-radius: var(--radius-pill);
             background: var(--accent);
             color: var(--honeydew);
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 600;
             cursor: pointer;
             transition: var(--transition);
@@ -133,6 +158,59 @@
         .search-row button:hover {
             transform: scale(1.02);
             box-shadow: 0 4px 20px var(--accent-glow);
+        }
+
+        /* ===== 候选框 ===== */
+        .candidate-dropdown {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+            z-index: 50;
+            max-height: 320px;
+            overflow-y: auto;
+            display: none;
+        }
+        .candidate-dropdown.open {
+            display: block;
+        }
+        .candidate-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-subtle);
+            transition: background 0.15s;
+        }
+        .candidate-item:last-child {
+            border-bottom: none;
+        }
+        .candidate-item:hover {
+            background: var(--bg-card-hover);
+        }
+        .candidate-item .cand-name {
+            font-size: 14px;
+            color: var(--text-primary);
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .candidate-item .cand-sub {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .candidate-empty {
+            padding: 14px 16px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-muted);
         }
 
         .quick-chips {
@@ -190,7 +268,6 @@
             font-size: 13px;
         }
 
-        /* ===== 推荐理由 ===== */
         .reason-box {
             background: rgba(168, 218, 220, 0.06);
             border-left: 3px solid var(--frosted-blue);
@@ -207,7 +284,6 @@
             font-style: italic;
         }
 
-        /* ===== 单曲卡片 ===== */
         .song-card {
             background: rgba(255, 255, 255, 0.03);
             border-radius: 12px;
@@ -261,6 +337,62 @@
             color: var(--frosted-blue);
             flex-shrink: 0;
             margin-left: 16px;
+        }
+        .no-link-hint {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-align: center;
+            margin-top: -6px;
+            margin-bottom: 12px;
+            font-style: italic;
+        }
+
+        /* ===== 反馈按钮三态 ===== */
+        .feedback-row {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .feedback-row button {
+            padding: 8px 20px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border-subtle);
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            font-size: 13px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .feedback-row button:hover:not(:disabled) {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+            border-color: var(--frosted-blue);
+        }
+        .feedback-row button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .feedback-row button.active-like {
+            background: rgba(74, 222, 128, 0.15);
+            border-color: #4ade80;
+            color: #4ade80;
+            opacity: 1;
+            cursor: not-allowed;
+        }
+        .feedback-row button.active-dislike {
+            background: rgba(230, 57, 70, 0.15);
+            border-color: var(--accent);
+            color: var(--accent);
+            opacity: 1;
+            cursor: not-allowed;
+        }
+        .feedback-row button.undo-btn {
+            color: var(--text-muted);
+        }
+        .feedback-row button.undo-btn.hidden {
+            visibility: hidden;
+            pointer-events: none;
         }
 
         /* ===== 翻页控件 ===== */
@@ -353,14 +485,22 @@
             <div class="brand">
                 <h1>真值推荐 <span>· 音乐探索</span></h1>
             </div>
-            <div class="stats">12M 曲库</div>
+            <div class="header-right">
+                <span class="user-badge">{{ request.user.username }}</span>
+                <a href="/feedback/" class="logout-btn">反馈记录</a>
+                <a href="/logout/" class="logout-btn">登出</a>
+            </div>
         </header>
 
-        <div class="search-row">
-            <input id="trackInput" type="text" placeholder="歌曲名，如 Shape of You" />
-            <input id="artistInput" type="text" placeholder="歌手（可选）" />
-            <button onclick="startRecommend()">探索</button>
+        <div class="search-box">
+            <div class="search-row">
+                <input id="trackInput" type="text" placeholder="歌曲名，如 Shape of You" autocomplete="off" />
+                <input id="artistInput" type="text" placeholder="歌手（可选）" autocomplete="off" />
+                <button onclick="startRecommend()">探索</button>
+            </div>
+            <div id="candidateDropdown" class="candidate-dropdown"></div>
         </div>
+
         <div class="quick-chips">
             <span onclick="quickSearch('Shape of You', 'Ed Sheeran')">Shape of You</span>
             <span onclick="quickSearch('Blinding Lights', 'The Weeknd')">Blinding Lights</span>
@@ -378,22 +518,25 @@
     </div>
 
     <script>
-        // 全局状态
         let currentResults = [];
         let currentIndex = 0;
         let currentQuery = '';
         let currentSeed = null;
+        let candidateTimer = null;
+        let candidateAbort = null;
 
         function startRecommend() {
             const track = document.getElementById('trackInput').value.trim();
             const artist = document.getElementById('artistInput').value.trim();
             if (!track) { alert('请输入歌曲名'); return; }
+            closeDropdown();
             doRecommend(track, artist);
         }
 
         function quickSearch(track, artist) {
             document.getElementById('trackInput').value = track;
             document.getElementById('artistInput').value = artist || '';
+            closeDropdown();
             doRecommend(track, artist || '');
         }
 
@@ -420,14 +563,15 @@
                         container.innerHTML = '<div class="placeholder"><div class="icon">♫</div><p>没有找到相似歌曲</p></div>';
                         return;
                     }
-                    // 保存状态
                     currentResults = data.results;
                     currentIndex = 0;
                     currentQuery = track;
                     currentSeed = data.seed;
 
-                    // 为每首歌初始化理由字段
-                    currentResults.forEach(r => { r._reason = ''; });
+                    currentResults.forEach(r => {
+                        r._reason = '';
+                        r._feedback = r._feedback || '';
+                    });
 
                     renderSong(container);
                 })
@@ -442,6 +586,7 @@
             const total = currentResults.length;
             const pct = (item.similarity * 100).toFixed(1);
             const neteaseUrl = item.netease_url || '';
+            const fb = item._feedback || '';
 
             const cardContent = `
                 <div class="song-info">
@@ -455,8 +600,10 @@
             const cardHtml = neteaseUrl
                 ? `<a class="song-link" href="${escapeHtml(neteaseUrl)}" target="_blank" rel="noopener">${cardContent}</a>`
                 : `<div class="song-link">${cardContent}</div>`;
+            const noLinkHint = !neteaseUrl
+                ? `<div class="no-link-hint">网易云暂无此歌曲的匹配结果</div>`
+                : '';
 
-            // 理由框：如果已有理由，直接显示；否则显示加载中
             let reasonInner = '';
             if (item._reason) {
                 reasonInner = escapeHtml(item._reason);
@@ -464,17 +611,28 @@
                 reasonInner = '<span class="reason-loading">正在生成推荐理由...</span>';
             }
 
+            const likeClass = fb === 'like' ? 'active-like' : '';
+            const dislikeClass = fb === 'dislike' ? 'active-dislike' : '';
+            const likeDisabled = fb === 'like' ? 'disabled' : '';
+            const dislikeDisabled = fb === 'dislike' ? 'disabled' : '';
+            const undoHidden = fb ? '' : 'hidden';
+
             let html = `
                 <div class="result-header">
                     <span>与《${escapeHtml(currentQuery)}》相似的歌曲</span>
                     <span>${currentIndex + 1} / ${total}</span>
                 </div>
                 <div class="reason-box" id="reasonBox">${reasonInner}</div>
-                <div class="song-card">${cardHtml}</div>
+                <div class="song-card">${cardHtml}${noLinkHint}</div>
                 <div class="pager">
                     <button onclick="prevSong()" ${currentIndex === 0 ? 'disabled' : ''}>‹</button>
                     <span class="page-info">${currentIndex + 1} / ${total}</span>
                     <button onclick="nextSong()" ${currentIndex >= total - 1 ? 'disabled' : ''}>›</button>
+                </div>
+                <div class="feedback-row">
+                    <button class="${likeClass}" ${likeDisabled} onclick="sendFeedback('like')">喜欢</button>
+                    <button class="${dislikeClass}" ${dislikeDisabled} onclick="sendFeedback('dislike')">不喜欢</button>
+                    <button class="undo-btn ${undoHidden}" onclick="sendFeedback('undo')">撤销</button>
                 </div>
             `;
 
@@ -489,17 +647,54 @@
 
             container.innerHTML = html;
 
-            // 如果当前歌还没有理由，异步请求
             if (!item._reason) {
                 loadReasonForCurrentSong();
             }
         }
 
+        function sendFeedback(feedback) {
+            const item = currentResults[currentIndex];
+            if (!item) return;
+
+            const prev = item._feedback || '';
+
+            item._feedback = feedback === 'undo' ? '' : feedback;
+            renderSong(document.getElementById('mainArea'));
+
+            fetch('/api/feedback/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    track_id: item.track_id || '',
+                    track_name: item.track_name,
+                    artist_name: item.artist_name,
+                    artist_genres: item.artist_genres,
+                    feedback: feedback,
+                }),
+            })
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    item._feedback = prev;
+                    renderSong(document.getElementById('mainArea'));
+                    alert('反馈失败: ' + data.error);
+                }
+            })
+            .catch(err => {
+                item._feedback = prev;
+                renderSong(document.getElementById('mainArea'));
+                console.error('反馈失败:', err);
+            });
+        }
+
         function loadReasonForCurrentSong() {
             const item = currentResults[currentIndex];
             if (!item) return;
-            if (item._reason) return;  // 已缓存
-            if (item._loading) return; // 正在加载
+            if (item._reason) return;
+            if (item._loading) return;
             item._loading = true;
 
             fetch('/api/reason/', {
@@ -520,7 +715,6 @@
                 item._loading = false;
                 if (data.reason) {
                     item._reason = data.reason;
-                    // 如果用户还停在这首歌，更新理由框
                     const box = document.getElementById('reasonBox');
                     if (box && currentResults[currentIndex] === item) {
                         box.innerHTML = escapeHtml(data.reason);
@@ -556,6 +750,66 @@
             }
         }
 
+        /* ===== 候选框逻辑 ===== */
+        function fetchCandidates() {
+            const q = document.getElementById('trackInput').value.trim();
+            const artist = document.getElementById('artistInput').value.trim();
+            const dropdown = document.getElementById('candidateDropdown');
+
+            if (!q) {
+                closeDropdown();
+                return;
+            }
+
+            if (candidateAbort) candidateAbort.abort();
+            candidateAbort = new AbortController();
+
+            let url = `/api/seed_candidates/?q=${encodeURIComponent(q)}`;
+            if (artist) url += `&artist=${encodeURIComponent(artist)}`;
+
+            fetch(url, { signal: candidateAbort.signal })
+                .then(res => res.json())
+                .then(data => {
+                    const list = data.candidates || [];
+                    if (list.length === 0) {
+                        dropdown.innerHTML = '<div class="candidate-empty">无匹配歌曲</div>';
+                        dropdown.classList.add('open');
+                        return;
+                    }
+                    dropdown.innerHTML = list.map((c, i) => `
+                        <div class="candidate-item" onclick="selectCandidate(${i})">
+                            <div class="cand-name">${escapeHtml(c.track_name)}</div>
+                            <div class="cand-sub">${escapeHtml(c.artist_name)}${c.artist_genres ? ' · ' + escapeHtml(c.artist_genres.split(',').slice(0,2).join(', ')) : ''}</div>
+                        </div>
+                    `).join('');
+                    dropdown.classList.add('open');
+                    window._candidates = list;
+                })
+                .catch(err => {
+                    if (err.name === 'AbortError') return;
+                    console.error('候选查询失败:', err);
+                });
+        }
+
+        function selectCandidate(idx) {
+            const list = window._candidates || [];
+            const c = list[idx];
+            if (!c) return;
+            document.getElementById('trackInput').value = c.track_name;
+            document.getElementById('artistInput').value = c.artist_name;
+            closeDropdown();
+            doRecommend(c.track_name, c.artist_name);
+        }
+
+        function closeDropdown() {
+            document.getElementById('candidateDropdown').classList.remove('open');
+        }
+
+        function scheduleCandidates() {
+            if (candidateTimer) clearTimeout(candidateTimer);
+            candidateTimer = setTimeout(fetchCandidates, 300);
+        }
+
         function escapeHtml(text) {
             if (!text) return '未知';
             const d = document.createElement('div');
@@ -564,17 +818,30 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('trackInput').addEventListener('input', scheduleCandidates);
+            document.getElementById('artistInput').addEventListener('input', () => {
+                if (document.getElementById('trackInput').value.trim()) {
+                    scheduleCandidates();
+                }
+            });
+
             document.getElementById('trackInput').addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') startRecommend();
             });
             document.getElementById('artistInput').addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') startRecommend();
             });
+
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.search-box')) closeDropdown();
+            });
+
             document.addEventListener('keydown', (e) => {
                 if (currentResults.length === 0) return;
                 if (e.key === 'ArrowLeft') prevSong();
                 if (e.key === 'ArrowRight') nextSong();
             });
+
             document.getElementById('trackInput').focus();
         });
     </script>

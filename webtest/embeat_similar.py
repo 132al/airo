@@ -94,6 +94,89 @@ class EmbeatSimilar:
 
         return best
 
+    # ========== 1.5 候选列表（宽松匹配，供用户选择） ==========
+    def find_candidates(self, track_name="", artist_name="", limit=10):
+        """
+        宽松匹配候选：只按 track_name 匹配，artist_name 作为排序权重。
+        返回多条，供用户选择。
+        """
+        if not track_name:
+            return []
+
+        must_conditions = [
+            qdrant_models.FieldCondition(
+                key="track_name",
+                match=qdrant_models.MatchText(text=track_name),
+            )
+        ]
+
+        try:
+            records, _ = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=qdrant_models.Filter(must=must_conditions),
+                limit=50,
+                with_payload=True,
+                with_vectors=False,
+            )
+        except Exception as e:
+            print(f"[候选] 查询失败: {e}")
+            return []
+
+        if not records:
+            return []
+
+        input_artists = self._split_artists(artist_name)
+
+        def artist_score(payload):
+            cand_artists = self._split_artists(payload.get("artist_name") or "")
+            if not input_artists:
+                return 0
+            if input_artists == cand_artists:
+                return 2
+            if input_artists.issubset(cand_artists):
+                return 1
+            if input_artists & cand_artists:
+                return 0
+            return -1
+
+        def score_record(r):
+            payload = r.payload or {}
+            name = str(payload.get("track_name") or "").lower()
+            pop = float(payload.get("popularity") or 0.0)
+            is_remix = 1 if "remix" in name else 0
+            a_score = artist_score(payload)
+            name_penalty = len(name)
+            return (is_remix, -a_score, -pop, name_penalty)
+
+        records_sorted = sorted(records, key=score_record)
+
+        results = []
+        seen = set()
+        for r in records_sorted:
+            p = r.payload or {}
+            key = (p.get("track_name", ""), p.get("artist_name", ""))
+            if key in seen:
+                continue
+            seen.add(key)
+            results.append({
+                "track_id": p.get("track_id", ""),
+                "track_name": p.get("track_name", ""),
+                "artist_name": p.get("artist_name", ""),
+                "artist_genres": p.get("artist_genres", ""),
+                "popularity": p.get("popularity", 0.0),
+            })
+            if len(results) >= limit:
+                break
+
+        return results
+
+    def _split_artists(self, s):
+        """把 'Ed Sheeran & Beyoncé' 拆成 {'ed sheeran', 'beyoncé'}"""
+        s = str(s or "").lower().strip()
+        for sep in [" feat. ", " featuring ", " with ", " & ", " / ", ", ", " x "]:
+            s = s.replace(sep, "|")
+        return {a.strip() for a in s.split("|") if a.strip()}
+
     # ========== 2. 声学相似召回 ==========
     def search_similar(
         self,
@@ -103,7 +186,7 @@ class EmbeatSimilar:
     ):
         """
         声学相似召回（对应官方 search_vector_similar_record）
-        
+
         Args:
             seed_vector: 种子向量
             candidate_limit: 召回数量
@@ -144,7 +227,6 @@ class EmbeatSimilar:
             return set()
         return {g.strip().lower() for g in genre_str.split(",") if g.strip()}
 
-
     def filter_candidates(self, seed_payload, candidates, top_k=20):
         """
         过滤候选：
@@ -159,7 +241,7 @@ class EmbeatSimilar:
         seed_track_id = str(seed_payload.get("track_id") or "")
 
         seed_genres_set = self._genres_set(seed_genre_str)
-        # 🆕 种子流派为空的标志
+        # 种子流派为空的标志
         seed_has_genre = bool(seed_genres_set) or seed_genre_idx > 0
 
         print(f"[过滤] 种子流派: {seed_genre_str or '（空）'}")
@@ -195,7 +277,7 @@ class EmbeatSimilar:
             if payload_popularity < min_popularity:
                 continue
 
-            # ===== 🆕 流派交集入围（仅当种子有流派时才启用） =====
+            # ===== 流派交集入围（仅当种子有流派时才启用） =====
             payload_genres_set = self._genres_set(payload_genre_str)
 
             if seed_has_genre:
@@ -208,7 +290,7 @@ class EmbeatSimilar:
                     # 候选流派为空，且种子有流派 → 淘汰
                     continue
 
-            # ===== 🆕 流派加分（仅当种子有流派时才启用） =====
+            # ===== 流派加分（仅当种子有流派时才启用） =====
             genre_bonus = 0.0
             if seed_has_genre:
                 if seed_genre_idx > 0 and payload_genre_idx == seed_genre_idx:

@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>反馈数据 · AIRO</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --punch-red: #e63946ff;
+            --honeydew: #f1faeeff;
+            --frosted-blue: #a8dadcff;
+            --cerulean: #457b9dff;
+            --oxford-navy: #1d3557ff;
+            --bg-deep: var(--oxford-navy);
+            --bg-surface: #1f2f4a;
+            --bg-card: rgba(255, 255, 255, 0.04);
+            --border-subtle: rgba(255, 255, 255, 0.06);
+            --text-primary: var(--honeydew);
+            --text-secondary: rgba(241, 250, 238, 0.70);
+            --text-muted: rgba(241, 250, 238, 0.35);
+            --accent: var(--punch-red);
+            --radius-card: 16px;
+            --radius-pill: 60px;
+            --transition: 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 24px;
+        }
+        .app {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        h1 {
+            font-size: 22px;
+            margin-bottom: 0;
+        }
+        h1 span {
+            color: var(--frosted-blue);
+            font-weight: 300;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .user-badge {
+            font-size: 12px;
+            color: var(--text-secondary);
+            background: var(--bg-card);
+            padding: 4px 14px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border-subtle);
+        }
+        .logout-btn {
+            font-size: 12px;
+            color: var(--text-muted);
+            background: var(--bg-card);
+            padding: 4px 14px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border-subtle);
+            text-decoration: none;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .logout-btn:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+            border-color: var(--frosted-blue);
+        }
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 13px;
+            margin-bottom: 24px;
+        }
+        .stats-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-card);
+            padding: 16px 24px;
+            min-width: 120px;
+        }
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: 600;
+            color: var(--frosted-blue);
+        }
+        .stat-card .label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+        .filter-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .filter-row select {
+            padding: 10px 16px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border-subtle);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+        }
+        .filter-row select:focus {
+            border-color: var(--accent);
+        }
+        .filter-row select option {
+            background: var(--bg-surface);
+            color: var(--text-primary);
+        }
+        .filter-row button {
+            padding: 10px 24px;
+            border-radius: var(--radius-pill);
+            border: none;
+            background: var(--accent);
+            color: var(--honeydew);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .filter-row button:hover {
+            transform: scale(1.02);
+        }
+        .panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-card);
+            padding: 20px 24px;
+            margin-bottom: 24px;
+        }
+        .panel h2 {
+            font-size: 16px;
+            margin-bottom: 16px;
+            color: var(--frosted-blue);
+        }
+        .profile-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        .profile-section {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.8;
+        }
+        .profile-section strong {
+            color: var(--text-primary);
+        }
+        .tag {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: var(--radius-pill);
+            background: rgba(168, 218, 220, 0.12);
+            color: var(--frosted-blue);
+            font-size: 12px;
+            margin-right: 6px;
+            margin-bottom: 4px;
+        }
+        .tag.bad {
+            background: rgba(230, 57, 70, 0.12);
+            color: #e63946;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th {
+            text-align: left;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 12px;
+        }
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+        }
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .fb-like {
+            color: #4ade80;
+            font-weight: 600;
+        }
+        .fb-dislike {
+            color: #e63946;
+            font-weight: 600;
+        }
+        .back-link {
+            display: inline-block;
+            margin-top: 16px;
+            color: var(--frosted-blue);
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        .empty {
+            color: var(--text-muted);
+            text-align: center;
+            padding: 40px 0;
+        }
+        @media (max-width: 700px) {
+            .profile-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="header-row">
+            <h1>反馈数据 <span>· AIRO</span></h1>
+            <div class="header-right">
+                <span class="user-badge">{{ request.user.username }}</span>
+                <a href="/logout/" class="logout-btn">登出</a>
+            </div>
+        </div>
+        <p class="subtitle">查看你的反馈记录和偏好档案</p>
+
+        <div class="stats-row" id="statsRow"></div>
+
+        <div class="panel">
+            <h2>我的档案</h2>
+            <div id="profileBox" class="empty">加载中...</div>
+        </div>
+
+        <div class="filter-row">
+            <select id="typeFilter">
+                <option value="">全部类型</option>
+                <option value="like">喜欢</option>
+                <option value="dislike">不喜欢</option>
+            </select>
+            <button onclick="loadData()">查询</button>
+        </div>
+
+        <div class="panel">
+            <h2>反馈记录</h2>
+            <div id="tableBox" class="empty">加载中...</div>
+        </div>
+
+        <a href="/" class="back-link">返回推荐页</a>
+    </div>
+
+    <script>
+        function loadData() {
+            const type = document.getElementById('typeFilter').value;
+
+            let url = '/api/feedback/list/?limit=200';
+            if (type) url += '&feedback=' + encodeURIComponent(type);
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    renderStats(data);
+                    renderProfile(data.profile);
+                    renderTable(data.results);
+                })
+                .catch(err => {
+                    document.getElementById('tableBox').innerHTML =
+                        '<div class="empty">加载失败: ' + escapeHtml(err.message) + '</div>';
+                });
+        }
+
+        function renderStats(data) {
+            const results = data.results || [];
+            const likeCount = results.filter(r => r.feedback === 'like').length;
+            const dislikeCount = results.filter(r => r.feedback === 'dislike').length;
+
+            document.getElementById('statsRow').innerHTML = `
+                <div class="stat-card"><div class="value">${data.total}</div><div class="label">总反馈</div></div>
+                <div class="stat-card"><div class="value">${likeCount}</div><div class="label">喜欢</div></div>
+                <div class="stat-card"><div class="value">${dislikeCount}</div><div class="label">不喜欢</div></div>
+            `;
+        }
+
+        function renderProfile(profile) {
+            const box = document.getElementById('profileBox');
+            if (!profile) {
+                box.innerHTML = '<div class="empty">暂无档案</div>';
+                return;
+            }
+
+            const preferredGenres = profile.preferred_genres || {};
+            const dislikedGenres = profile.disliked_genres || {};
+            const preferredArtists = profile.preferred_artists || {};
+            const summary = profile.llm_summary || '';
+
+            const genresHtml = Object.entries(preferredGenres)
+                .sort((a, b) => b[1] - a[1])
+                .map(([g, c]) => `<span class="tag">${escapeHtml(g)} ×${c}</span>`)
+                .join('') || '<span style="color:var(--text-muted)">暂无</span>';
+
+            const badGenresHtml = Object.entries(dislikedGenres)
+                .sort((a, b) => b[1] - a[1])
+                .map(([g, c]) => `<span class="tag bad">${escapeHtml(g)} ×${c}</span>`)
+                .join('') || '<span style="color:var(--text-muted)">暂无</span>';
+
+            const artistsHtml = Object.entries(preferredArtists)
+                .sort((a, b) => b[1] - a[1])
+                .map(([a, c]) => `<span class="tag">${escapeHtml(a)} ×${c}</span>`)
+                .join('') || '<span style="color:var(--text-muted)">暂无</span>';
+
+            box.innerHTML = `
+                <div class="profile-grid">
+                    <div class="profile-section">
+                        <strong>偏好流派</strong><br>${genresHtml}
+                    </div>
+                    <div class="profile-section">
+                        <strong>不喜欢流派</strong><br>${badGenresHtml}
+                    </div>
+                    <div class="profile-section">
+                        <strong>偏好歌手</strong><br>${artistsHtml}
+                    </div>
+                    <div class="profile-section">
+                        <strong>LLM 摘要</strong><br>${summary ? escapeHtml(summary) : '<span style="color:var(--text-muted)">暂无</span>'}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderTable(results) {
+            const box = document.getElementById('tableBox');
+            if (!results || results.length === 0) {
+                box.innerHTML = '<div class="empty">暂无反馈记录</div>';
+                return;
+            }
+
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>歌曲</th>
+                            <th>歌手</th>
+                            <th>流派</th>
+                            <th>反馈</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            results.forEach(r => {
+                const cls = r.feedback === 'like' ? 'fb-like' : 'fb-dislike';
+                const text = r.feedback === 'like' ? '喜欢' : '不喜欢';
+                html += `
+                    <tr>
+                        <td>${escapeHtml(r.created_at)}</td>
+                        <td>${escapeHtml(r.track_name)}</td>
+                        <td>${escapeHtml(r.artist_name)}</td>
+                        <td>${escapeHtml((r.artist_genres || '').split(',').slice(0, 3).join(', '))}</td>
+                        <td class="${cls}">${text}</td>
+                    </tr>
+                `;
+            });
+
+            html += `</tbody></table>`;
+            box.innerHTML = html;
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const d = document.createElement('div');
+            d.textContent = text;
+            return d.innerHTML;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+        });
+    </script>
+</body>
+</html>

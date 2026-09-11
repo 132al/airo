@@ -48,10 +48,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'webtest.middleware.LoginRequiredMiddleware',
 ]
 
 ROOT_URLCONF = 'web_project.urls'
-
+LOGIN_URL = "/login/"
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',

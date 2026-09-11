@@ -118,7 +118,7 @@ def _parse_content(resp):
 
 
 def search_netease(track_name, artist_name=""):
-    """搜索网易云歌曲，返回 {netease_id, netease_url}"""
+    """搜索网易云歌曲，严格匹配歌名+歌手，找不到返回 None"""
     try:
         cli = get_client()
         query = f"{track_name} {artist_name}".strip()
@@ -126,7 +126,7 @@ def search_netease(track_name, artist_name=""):
         resp = cli.call_tool("search", {
             "platform": "netease",
             "keyword": query,
-            "limit": 5,
+            "limit": 10,   # 多取几条，提高匹配概率
         })
 
         data = _parse_content(resp)
@@ -137,29 +137,37 @@ def search_netease(track_name, artist_name=""):
         if not songs:
             return None
 
-        # 优先找 artist 匹配的那条
-        matched = None
-        if artist_name:
-            artist_lower = artist_name.lower()
-            for song in songs:
-                song_artists = song.get("artist", [])
-                if isinstance(song_artists, list):
-                    song_artist_str = " ".join(song_artists).lower()
-                else:
-                    song_artist_str = str(song_artists).lower()
-                if artist_lower in song_artist_str:
-                    matched = song
-                    break
+        track_lower = track_name.lower().strip()
+        artist_lower = artist_name.lower().strip() if artist_name else ""
 
-        song = matched or songs[0]
-        song_id = song.get("id")
-        if not song_id:
-            return None
+        for song in songs:
+            song_name = str(song.get("name", "")).lower().strip()
 
-        return {
-            "netease_id": str(song_id),
-            "netease_url": f"https://music.163.com/#/song?id={song_id}",
-        }
+            # 歌名匹配：包含关系（双向）
+            name_match = (track_lower in song_name) or (song_name in track_lower)
+
+            # 歌手匹配
+            song_artists = song.get("artist", [])
+            if isinstance(song_artists, list):
+                song_artist_str = " ".join(str(a) for a in song_artists).lower()
+            else:
+                song_artist_str = str(song_artists).lower()
+
+            artist_match = (not artist_lower) or (artist_lower in song_artist_str)
+
+            if name_match and artist_match:
+                song_id = song.get("id")
+                if not song_id:
+                    continue
+                return {
+                    "netease_id": str(song_id),
+                    "netease_url": f"https://music.163.com/#/song?id={song_id}",
+                }
+
+        # 没找到匹配的
+        print(f"[Meting] 未找到匹配: {track_name} - {artist_name}")
+        return None
+
     except Exception as e:
         print(f"[Meting] 查询失败 {track_name}: {e}")
         return None

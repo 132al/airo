@@ -208,6 +208,20 @@ def reason_api(request):
         rec_genres = data.get("artist_genres", "")
         sim = float(data.get("similarity", 0))
 
+        # 拿当前用户的档案
+        user_summary = ""
+        preferred_genres = {}
+        liked_artists = {}
+        profile = UserProfile.objects.filter(user=request.user).first()
+        if profile:
+            try:
+                profile_data = json.loads(profile.profile_json or "{}")
+                user_summary = profile_data.get("llm_summary", "")
+                preferred_genres = profile_data.get("preferred_genres", {})
+                liked_artists = profile_data.get("preferred_artists", {})
+            except Exception:
+                pass
+
         from webtest.reason_generator import generate_song_reason
         reason = generate_song_reason(
             seed_track=seed_track,
@@ -217,6 +231,9 @@ def reason_api(request):
             rec_artist=rec_artist,
             rec_genres=rec_genres,
             similarity=sim,
+            user_summary=user_summary,
+            preferred_genres=preferred_genres,
+            liked_artists=liked_artists,
         )
 
         return JsonResponse({"reason": reason})
@@ -317,8 +334,8 @@ def feedback_list_api(request):
 
 # ===================== 数据浏览 API =====================
 def data_api(request):
-    page = int(request.GET.get("page", 1))
     limit = int(request.GET.get("limit", 20))
+    cursor = request.GET.get("cursor", "").strip()
     track_name = request.GET.get("q", "").strip()
     artist_name = request.GET.get("artist", "").strip()
     genre = request.GET.get("genre", "").strip()
@@ -331,10 +348,10 @@ def data_api(request):
     if genre:
         must_conditions.append({"key": "artist_genres", "match": {"text": genre}})
 
+    # 总数
     count_payload = {}
     if must_conditions:
         count_payload["filter"] = {"must": must_conditions}
-
     try:
         resp = requests.post(
             f"{QDRANT_URL}/collections/{COLLECTION_NAME}/points/count",
@@ -345,13 +362,13 @@ def data_api(request):
     except Exception:
         total = 0
 
-    total_pages = (total + limit - 1) // limit if limit > 0 else 1
-
+    # 翻页
     scroll_payload = {
         "limit": limit,
-        "offset": (page - 1) * limit,
         "with_payload": True,
     }
+    if cursor:
+        scroll_payload["offset"] = cursor
     if must_conditions:
         scroll_payload["filter"] = {"must": must_conditions}
 
@@ -362,7 +379,9 @@ def data_api(request):
             timeout=30,
         )
         resp.raise_for_status()
-        points = safe_get(resp.json(), "result", "points", default=[])
+        result = resp.json().get("result", {})
+        points = result.get("points", [])
+        next_cursor = result.get("next_page_offset")
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
@@ -381,10 +400,12 @@ def data_api(request):
     return JsonResponse({
         "results": results,
         "total": total,
-        "page": page,
+        "cursor": cursor,
+        "next_cursor": next_cursor,
         "limit": limit,
-        "total_pages": total_pages,
     })
+
+
 def seed_candidates_api(request):
     q = request.GET.get("q", "").strip()
     artist = request.GET.get("artist", "").strip()

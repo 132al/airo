@@ -1,122 +1,381 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>数据浏览</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据浏览 · AIRO</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: Arial; background: #1a1a2e; color: #fff; padding: 20px; }
-        table { width: 100%; border-collapse: collapse; }
-        th { background: #16213e; padding: 10px; text-align: left; }
-        td { padding: 8px; border-bottom: 1px solid #333; }
-        tr:hover { background: #16213e; }
-        .pagination { margin-top: 20px; display: flex; gap: 10px; align-items: center; }
-        .pagination button { padding: 8px 16px; background: #e94560; color: #fff; border: none; cursor: pointer; border-radius: 6px; }
-        .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .search-box { margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
-        .search-box input, .search-box select { padding: 10px; border-radius: 6px; border: 1px solid #333; background: #16213e; color: #fff; }
-        .search-box button { padding: 10px 24px; background: #e94560; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
-        .stats { margin-bottom: 10px; color: #888; }
-        .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; background: #333; }
-        .badge.pop { background: #e94560; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --punch-red: #e63946ff;
+            --honeydew: #f1faeeff;
+            --frosted-blue: #a8dadcff;
+            --cerulean: #457b9dff;
+            --oxford-navy: #1d3557ff;
+            --bg-deep: var(--oxford-navy);
+            --bg-surface: #1f2f4a;
+            --bg-card: rgba(255, 255, 255, 0.04);
+            --bg-card-hover: rgba(255, 255, 255, 0.08);
+            --border-subtle: rgba(255, 255, 255, 0.06);
+            --text-primary: var(--honeydew);
+            --text-secondary: rgba(241, 250, 238, 0.70);
+            --text-muted: rgba(241, 250, 238, 0.35);
+            --accent: var(--punch-red);
+            --accent-glow: rgba(230, 57, 70, 0.20);
+            --radius-card: 16px;
+            --radius-pill: 60px;
+            --transition: 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 24px;
+        }
+        .app {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        h1 {
+            font-size: 22px;
+            margin-bottom: 0;
+        }
+        h1 span {
+            color: var(--frosted-blue);
+            font-weight: 300;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .user-badge {
+            font-size: 12px;
+            color: var(--text-secondary);
+            background: var(--bg-card);
+            padding: 4px 14px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border-subtle);
+        }
+        .nav-btn {
+            font-size: 12px;
+            color: var(--text-muted);
+            background: var(--bg-card);
+            padding: 4px 14px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border-subtle);
+            text-decoration: none;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .nav-btn:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+            border-color: var(--frosted-blue);
+        }
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 13px;
+            margin-bottom: 24px;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .search-box input,
+        .search-box select {
+            padding: 10px 16px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border-subtle);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            transition: var(--transition);
+        }
+        .search-box input::placeholder {
+            color: var(--text-muted);
+        }
+        .search-box input:focus,
+        .search-box select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        .search-box button {
+            padding: 10px 22px;
+            border-radius: var(--radius-pill);
+            border: none;
+            background: var(--accent);
+            color: var(--honeydew);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .search-box button:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+        .search-box button.secondary {
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-subtle);
+        }
+        .search-box button.secondary:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+            border-color: var(--frosted-blue);
+            transform: none;
+            box-shadow: none;
+        }
+
+        .stats {
+            color: var(--text-muted);
+            font-size: 13px;
+            margin-bottom: 14px;
+        }
+
+        .panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-card);
+            overflow: hidden;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th {
+            text-align: left;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 12px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: var(--radius-pill);
+            font-size: 11px;
+            background: rgba(168, 218, 220, 0.12);
+            color: var(--frosted-blue);
+        }
+        .badge.pop {
+            background: rgba(230, 57, 70, 0.12);
+            color: var(--accent);
+        }
+        .empty {
+            color: var(--text-muted);
+            text-align: center;
+            padding: 40px 0;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            margin-top: 20px;
+        }
+        .pagination button {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 1px solid var(--border-subtle);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 18px;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .pagination button:hover:not(:disabled) {
+            background: var(--accent);
+            border-color: var(--accent);
+            box-shadow: 0 4px 20px var(--accent-glow);
+            transform: scale(1.05);
+        }
+        .pagination button:disabled {
+            opacity: 0.25;
+            cursor: not-allowed;
+        }
+        .pagination .page-info {
+            font-size: 14px;
+            color: var(--text-secondary);
+            min-width: 80px;
+            text-align: center;
+        }
+
+        @media (max-width: 700px) {
+            .search-box { flex-direction: column; }
+            .search-box input,
+            .search-box select,
+            .search-box button { width: 100%; }
+        }
     </style>
 </head>
 <body>
-    <h1>🎵 数据浏览</h1>
-    <p style="color:#888;">Qdrant 中的歌曲数据</p>
+    <div class="app">
+        <div class="header-row">
+            <h1>数据浏览 <span>· AIRO</span></h1>
+            <div class="header-right">
+                <span class="user-badge">{{ request.user.username }}</span>
+                <a href="/" class="nav-btn">推荐页</a>
+                <a href="/feedback/" class="nav-btn">反馈记录</a>
+                <a href="/logout/" class="nav-btn">登出</a>
+            </div>
+        </div>
+        <p class="subtitle">Qdrant 中的歌曲数据</p>
 
-    <div class="search-box">
-        <input id="q" placeholder="搜索歌曲名..." />
-        <input id="artist" placeholder="搜索歌手..." />
-        <select id="genre">
-            <option value="">全部流派</option>
-            <option value="pop">Pop</option>
-            <option value="rock">Rock</option>
-            <option value="jazz">Jazz</option>
-            <option value="electronic">Electronic</option>
-            <option value="hip-hop">Hip-Hop</option>
-        </select>
-        <button onclick="loadData()">搜索</button>
-        <button onclick="loadData(true)">🔄 刷新</button>
-    </div>
+        <div class="search-box">
+            <input id="q" placeholder="搜索歌曲名..." />
+            <input id="artist" placeholder="搜索歌手..." />
+            <select id="genre">
+                <option value="">全部流派</option>
+                <option value="pop">Pop</option>
+                <option value="rock">Rock</option>
+                <option value="jazz">Jazz</option>
+                <option value="electronic">Electronic</option>
+                <option value="hip hop">Hip-Hop</option>
+            </select>
+            <select id="limitSelect">
+                <option value="20">20 条</option>
+                <option value="50">50 条</option>
+                <option value="100">100 条</option>
+            </select>
+            <button onclick="loadData(true)">搜索</button>
+            <button class="secondary" onclick="loadData(true)">刷新</button>
+        </div>
 
-    <div class="stats" id="stats">加载中...</div>
+        <div class="stats" id="stats">加载中...</div>
 
-    <div style="overflow-x:auto;">
-        <table>
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>歌曲名</th>
-                    <th>歌手</th>
-                    <th>流派</th>
-                    <th>热度</th>
-                </tr>
-            </thead>
-            <tbody id="tableBody">
-                <tr><td colspan="5" style="text-align:center;color:#888;">加载中...</td></tr>
-            </tbody>
-        </table>
-    </div>
+        <div class="panel">
+            <div style="overflow-x:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>歌曲名</th>
+                            <th>歌手</th>
+                            <th>流派</th>
+                            <th>热度</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr><td colspan="5" class="empty">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-    <div class="pagination">
-        <button id="prevBtn" onclick="prevPage()">上一页</button>
-        <span id="pageInfo">1 / 1</span>
-        <button id="nextBtn" onclick="nextPage()">下一页</button>
-        <select id="limitSelect" onchange="loadData()">
-            <option value="20">20条</option>
-            <option value="50">50条</option>
-            <option value="100">100条</option>
-        </select>
+        <div class="pagination">
+            <button id="prevBtn" onclick="prevPage()">‹</button>
+            <span class="page-info" id="pageInfo">第 1 页</span>
+            <button id="nextBtn" onclick="nextPage()">›</button>
+        </div>
     </div>
 
     <script>
-        let currentPage = 1;
-        let totalPages = 1;
-        let currentData = [];
+        let cursorStack = [""];
+        let pageIndex = 0;
+        let hasNext = false;
+        let lastPageSize = 0;
 
-        function loadData(resetPage = true) {
-            if (resetPage) currentPage = 1;
+        function loadData(reset) {
+            if (reset) {
+                cursorStack = [""];
+                pageIndex = 0;
+            }
 
             const q = document.getElementById('q').value.trim();
             const artist = document.getElementById('artist').value.trim();
             const genre = document.getElementById('genre').value;
             const limit = document.getElementById('limitSelect').value;
+            const cursor = cursorStack[pageIndex] || "";
 
-            let url = `/api/data/?page=${currentPage}&limit=${limit}`;
+            let url = `/api/data/?limit=${limit}`;
+            if (cursor) url += `&cursor=${encodeURIComponent(cursor)}`;
             if (q) url += `&q=${encodeURIComponent(q)}`;
             if (artist) url += `&artist=${encodeURIComponent(artist)}`;
             if (genre) url += `&genre=${encodeURIComponent(genre)}`;
 
-            document.getElementById('tableBody').innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">加载中...</td></tr>';
+            document.getElementById('tableBody').innerHTML =
+                '<tr><td colspan="5" class="empty">加载中...</td></tr>';
 
             fetch(url)
                 .then(res => res.json())
                 .then(data => {
                     if (data.error) {
-                        document.getElementById('tableBody').innerHTML = `<tr><td colspan="5" style="text-align:center;color:#d48a8a;">${data.error}</td></tr>`;
+                        document.getElementById('tableBody').innerHTML =
+                            `<tr><td colspan="5" class="empty">${escapeHtml(data.error)}</td></tr>`;
                         return;
                     }
-                    currentData = data.results || [];
-                    totalPages = data.total_pages || 1;
-                    renderTable(currentData, data.page, data.limit);
-                    updatePagination(data.page, totalPages);
-                    document.getElementById('stats').textContent = `共 ${data.total || 0} 条记录`;
+
+                    const results = data.results || [];
+                    lastPageSize = results.length;
+                    hasNext = !!data.next_cursor;
+
+                    if (hasNext) {
+                        cursorStack[pageIndex + 1] = data.next_cursor;
+                    } else {
+                        cursorStack = cursorStack.slice(0, pageIndex + 1);
+                    }
+
+                    renderTable(results);
+                    updatePagination();
+
+                    document.getElementById('stats').textContent =
+                        `共 ${data.total || 0} 条记录 · 第 ${pageIndex + 1} 页 · 本页 ${results.length} 条`;
                 })
                 .catch(err => {
-                    document.getElementById('tableBody').innerHTML = `<tr><td colspan="5" style="text-align:center;color:#d48a8a;">请求失败: ${err.message}</td></tr>`;
+                    document.getElementById('tableBody').innerHTML =
+                        `<tr><td colspan="5" class="empty">请求失败: ${escapeHtml(err.message)}</td></tr>`;
                 });
         }
 
-        function renderTable(data, page, limit) {
+        function renderTable(data) {
             if (!data || data.length === 0) {
-                document.getElementById('tableBody').innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">暂无数据</td></tr>';
+                document.getElementById('tableBody').innerHTML =
+                    '<tr><td colspan="5" class="empty">暂无数据</td></tr>';
                 return;
             }
 
+            const start = pageIndex * parseInt(document.getElementById('limitSelect').value);
+
             let html = '';
-            const start = (page - 1) * limit;
             data.forEach((item, i) => {
-                const genres = item.artist_genres ? item.artist_genres.split(',').slice(0, 2).join(', ') : '-';
+                const genres = item.artist_genres
+                    ? item.artist_genres.split(',').slice(0, 2).join(', ')
+                    : '-';
                 const pop = item.popularity ? Math.round(item.popularity * 100) : 0;
                 const popClass = pop > 70 ? 'badge pop' : 'badge';
                 html += `
@@ -132,6 +391,26 @@
             document.getElementById('tableBody').innerHTML = html;
         }
 
+        function updatePagination() {
+            document.getElementById('pageInfo').textContent = `第 ${pageIndex + 1} 页`;
+            document.getElementById('prevBtn').disabled = pageIndex <= 0;
+            document.getElementById('nextBtn').disabled = !hasNext;
+        }
+
+        function prevPage() {
+            if (pageIndex > 0) {
+                pageIndex--;
+                loadData(false);
+            }
+        }
+
+        function nextPage() {
+            if (hasNext && cursorStack[pageIndex + 1]) {
+                pageIndex++;
+                loadData(false);
+            }
+        }
+
         function escapeHtml(text) {
             if (!text) return '-';
             const div = document.createElement('div');
@@ -139,25 +418,15 @@
             return div.innerHTML;
         }
 
-        function updatePagination(page, total) {
-            document.getElementById('pageInfo').textContent = `${page} / ${total}`;
-            document.getElementById('prevBtn').disabled = page <= 1;
-            document.getElementById('nextBtn').disabled = page >= total;
-        }
-
-        function prevPage() {
-            if (currentPage > 1) { currentPage--; loadData(false); }
-        }
-
-        function nextPage() {
-            if (currentPage < totalPages) { currentPage++; loadData(false); }
-        }
-
-        // Enter 键触发搜索
         document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadData(); });
-            document.getElementById('artist').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadData(); });
-            loadData();
+            document.getElementById('q').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') loadData(true);
+            });
+            document.getElementById('artist').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') loadData(true);
+            });
+            document.getElementById('limitSelect').addEventListener('change', () => loadData(true));
+            loadData(true);
         });
     </script>
 </body>

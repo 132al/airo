@@ -63,7 +63,7 @@ def analyze_profile(profile_data: dict) -> str:
     if not liked and not disliked and not top_genres:
         return ""
 
-    prompt = f"""根据以下用户音乐行为数据，总结这个用户的音乐偏好（50字以内）：
+    prompt = f"""根据以下用户音乐行为数据，总结这个用户的音乐偏好）：
 
 喜欢的歌曲：
 {json.dumps(liked, ensure_ascii=False)}
@@ -83,7 +83,7 @@ def analyze_profile(profile_data: dict) -> str:
 请用一段简洁的中文描述这个用户的音乐品味，包括他喜欢的风格特点、不喜欢的东西。不要列举具体歌名。"""
 
     try:
-        summary = client.generate(prompt=prompt, max_tokens=500, temperature=0.7)
+        summary = client.generate(prompt=prompt, max_tokens=800, temperature=0.7)
         if summary:
             return summary.strip()
     except Exception as e:

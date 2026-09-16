@@ -1,15 +1,92 @@
-# test_meting.py
-from webtest.meting_client import search_netease, enrich_results_with_netease
+# check_payload.py
+import requests
+from collections import Counter
 
-# 单曲测试
-info = search_netease("Shape of You", "Ed Sheeran")
-print(f"单曲结果: {info}")
+QDRANT_URL = "http://localhost:6333"
+COLLECTION = "spotify_tracks"
 
-# 批量测试
-results = [
-    {"track_name": "Shape of You", "artist_name": "Ed Sheeran"},
-    {"track_name": "Blinding Lights", "artist_name": "The Weeknd"},
-]
-enriched = enrich_results_with_netease(results)
-for item in enriched:
-    print(f"{item['track_name']}: {item.get('cover_url', '')[:50]}...")
+# 抽样数量
+SAMPLE_SIZE = 2000
+
+
+def main():
+    # 1. 取 collection 信息
+    resp = requests.get(f"{QDRANT_URL}/collections/{COLLECTION}")
+    info = resp.json().get("result", {})
+    print(f"Collection: {COLLECTION}")
+    print(f"points_count: {info.get('points_count')}")
+    print(f"vectors_count: {info.get('vectors_count')}")
+    print(f"status: {info.get('status')}")
+    print()
+
+    # 2. 看 payload schema
+    schema = info.get("payload_schema", {})
+    print("Payload schema（已建索引的字段）:")
+    for k, v in schema.items():
+        print(f"  {k}: {v.get('data_type')}")
+    print()
+
+    # 3. 抽样看实际字段
+    print(f"抽样 {SAMPLE_SIZE} 条，统计字段出现次数...")
+    field_counter = Counter()
+    sample_values = {}
+
+    next_offset = None
+    fetched = 0
+
+    while fetched < SAMPLE_SIZE:
+        payload = {
+            "limit": 100,
+            "with_payload": True,
+            "with_vector": False,
+        }
+        if next_offset is not None:
+            payload["offset"] = next_offset
+
+        resp = requests.post(
+            f"{QDRANT_URL}/collections/{COLLECTION}/points/scroll",
+            json=payload,
+            timeout=30,
+        )
+        result = resp.json().get("result", {})
+        points = result.get("points", [])
+        if not points:
+            break
+
+        for p in points:
+            pl = p.get("payload", {})
+            for k, v in pl.items():
+                field_counter[k] += 1
+                if k not in sample_values:
+                    sample_values[k] = v
+
+        fetched += len(points)
+        next_offset = result.get("next_page_offset")
+        if next_offset is None:
+            break
+
+    print(f"实际抽样 {fetched} 条")
+    print()
+    print("字段出现次数（降序）:")
+    for k, c in field_counter.most_common():
+        pct = c / fetched * 100
+        val = sample_values.get(k)
+        val_str = repr(val)[:60]
+        print(f"  {k:30s} {c:6d} ({pct:5.1f}%)  示例: {val_str}")
+
+    # 4. 重点看有没有年代相关字段
+    print()
+    print("=" * 60)
+    print("年代相关字段检查:")
+    year_fields = [k for k in field_counter if any(
+        s in k.lower() for s in ["year", "date", "release", "decade", "time"]
+    )]
+    if year_fields:
+        for f in year_fields:
+            print(f"  找到: {f}  示例: {repr(sample_values.get(f))[:80]}")
+    else:
+        print("  没有找到任何年代相关字段")
+
+
+if __name__ == "__main__":
+    main()

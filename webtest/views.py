@@ -183,8 +183,12 @@ def personalize_results(results, profile_data):
         if artist in preferred_artists:
             bonus += (preferred_artists[artist] / max_artist) * 0.08
 
+        base = r.get("final_score")
+        if base is None:
+            base = r.get("similarity", 0.0)
+
         r["_personal_bonus"] = round(bonus, 4)
-        r["_final_score"] = r["similarity"] + bonus
+        r["_final_score"] = round(base + bonus, 4)
 
     results.sort(key=lambda x: x["_final_score"], reverse=True)
     return results
@@ -415,3 +419,67 @@ def seed_candidates_api(request):
 
     candidates = embeat.find_candidates(track_name=q, artist_name=artist, limit=10)
     return JsonResponse({"candidates": candidates})
+
+
+# ===================== 意图推荐 API =====================
+@csrf_exempt
+def recommend_by_intent_api(request):
+    """LLM 选种子 → 召回 20 条 → LLM 筛 5 条"""
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        query = data.get("query", "").strip()
+        if not query:
+            return JsonResponse({"error": "query 不能为空"}, status=400)
+
+        from webtest.llm_recommender import pick_seed, filter_candidates
+
+        # 1. LLM 推荐种子
+        seed_track, seed_artist = pick_seed(query)
+        print(f"[意图推荐] LLM 种子: {seed_track} - {seed_artist}")
+
+        if not seed_track:
+            return JsonResponse({"error": "LLM 未能推荐种子"}, status=500)
+
+        # 2. 召回 20 条（candidate_limit=60，filter_candidates 输出 top_k=20）
+        result = embeat.recommend(
+            track_name=seed_track,
+            artist_name=seed_artist or "",
+            top_k=20,
+            candidate_limit=60,
+        )
+
+        if "error" in result:
+            print(f"[意图推荐] 召回失败: {result.get('error')}")
+            return JsonResponse(result, status=404)
+
+        candidates = result.get("results", [])
+        if not candidates:
+            return JsonResponse({"error": "未召回候选"}, status=404)
+
+        print(f"[意图推荐] 召回 {len(candidates)} 条候选")
+
+        # 3. LLM 从候选里选 5 条
+        picks = filter_candidates(query, result.get("seed", {}), candidates, top_n=5)
+        picked = [candidates[i] for i in picks]
+
+        print(f"[意图推荐] LLM 选中 {len(picked)} 条")
+
+        # 4. 补网易云链接
+        picked = enrich_results_with_netease(picked)
+
+        # 5. 附加反馈
+        attach_user_feedback(picked, request.user)
+
+        return JsonResponse({
+            "seed": result.get("seed"),
+            "results": picked,
+            "reason": "",
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({"error": str(e)}, status=500)

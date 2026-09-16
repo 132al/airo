@@ -14,4 +14,5 @@ urlpatterns = [
     path('register/', views.register_view, name='register'),
     path('logout/', views.logout_view, name='logout'),
     path('api/seed_candidates/', views.seed_candidates_api, name='seed_candidates_api'),
+    path('api/recommend_by_intent/', views.recommend_by_intent_api, name='recommend_by_intent_api'),
 ]

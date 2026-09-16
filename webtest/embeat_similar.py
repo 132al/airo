@@ -341,12 +341,13 @@ class EmbeatSimilar:
 
     # ========== 4. 主入口 ==========
     def recommend(
-        self,
+         self,
         track_id: str = "",
         isrc: str = "",
         track_name: str = "",
         artist_name: str = "",
         top_k: int = 20,
+        candidate_limit: int = None,
     ):
         """主入口：只做声学相似一路召回"""
         # 1. 查找种子

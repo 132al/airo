@@ -114,10 +114,10 @@
             border-color: var(--frosted-blue);
         }
 
-        /* ===== 搜索区 ===== */
+        /* ===== 歌名搜索区 ===== */
         .search-box {
             position: relative;
-            margin-bottom: 16px;
+            margin-bottom: 10px;
         }
         .search-row {
             display: flex;
@@ -213,6 +213,46 @@
             color: var(--text-muted);
         }
 
+        /* ===== 意图搜索区 ===== */
+        .intent-box {
+            margin-bottom: 16px;
+        }
+        .intent-box .search-row input {
+            flex: 1;
+            min-width: 120px;
+            padding: 10px 16px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border-subtle);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            transition: var(--transition);
+        }
+        .intent-box .search-row input::placeholder {
+            color: var(--text-muted);
+        }
+        .intent-box .search-row input:focus {
+            border-color: var(--frosted-blue);
+            box-shadow: 0 0 0 3px rgba(168, 218, 220, 0.15);
+        }
+        .intent-box .search-row button {
+            padding: 10px 22px;
+            border: none;
+            border-radius: var(--radius-pill);
+            background: var(--frosted-blue);
+            color: var(--oxford-navy);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            flex-shrink: 0;
+        }
+        .intent-box .search-row button:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 20px rgba(168, 218, 220, 0.25);
+        }
+
         .quick-chips {
             display: flex;
             gap: 8px;
@@ -233,6 +273,14 @@
             background: var(--bg-card-hover);
             color: var(--text-primary);
             border-color: var(--frosted-blue);
+        }
+        .quick-chips span.intent-chip {
+            border-color: rgba(168, 218, 220, 0.25);
+            color: var(--frosted-blue);
+        }
+        .quick-chips span.intent-chip:hover {
+            border-color: var(--frosted-blue);
+            background: rgba(168, 218, 220, 0.08);
         }
 
         .recommendation-area {
@@ -395,6 +443,26 @@
             pointer-events: none;
         }
 
+        .seed-info .seed-tags {
+            margin-top: 6px;
+            text-align: right;
+        }
+        .seed-info .lfm-tag {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: var(--radius-pill);
+            background: rgba(168, 218, 220, 0.12);
+            color: var(--frosted-blue);
+            font-size: 11px;
+            margin-left: 4px;
+            margin-top: 4px;
+        }
+        .seed-info .lfm-tag-empty {
+            color: var(--text-muted);
+            font-size: 11px;
+            font-style: italic;
+        }
+
         /* ===== 翻页控件 ===== */
         .pager {
             display: flex;
@@ -483,7 +551,7 @@
 
         <header class="header">
             <div class="brand">
-                <h1> <span>AIRO推荐系统</span></h1>
+                <h1>AIRO <span>· 音乐推荐</span></h1>
             </div>
             <div class="header-right">
                 <span class="user-badge">{{ request.user.username }}</span>
@@ -492,6 +560,7 @@
             </div>
         </header>
 
+        <!-- 歌名搜索 -->
         <div class="search-box">
             <div class="search-row">
                 <input id="trackInput" type="text" placeholder="歌曲名，如 Shape of You" autocomplete="off" />
@@ -501,17 +570,27 @@
             <div id="candidateDropdown" class="candidate-dropdown"></div>
         </div>
 
+        <!-- 意图搜索 -->
+        <div class="intent-box">
+            <div class="search-row">
+                <input id="intentInput" type="text" placeholder="描述你的心情或场景，如：适合下雨天的歌" autocomplete="off" />
+                <button onclick="startIntentRecommend()">智能推荐</button>
+            </div>
+        </div>
+
         <div class="quick-chips">
             <span onclick="quickSearch('Shape of You', 'Ed Sheeran')">Shape of You</span>
             <span onclick="quickSearch('Blinding Lights', 'The Weeknd')">Blinding Lights</span>
             <span onclick="quickSearch('Bohemian Rhapsody', 'Queen')">Bohemian Rhapsody</span>
-            <span onclick="quickSearch('Die With A Smile', 'Lady Gaga')">Die With A Smile</span>
+            <span class="intent-chip" onclick="quickIntent('适合下雨天听的歌')">适合下雨天</span>
+            <span class="intent-chip" onclick="quickIntent('开心的英式流行')">开心的英式流行</span>
+            <span class="intent-chip" onclick="quickIntent('深夜放松的爵士')">深夜放松的爵士</span>
         </div>
 
         <div class="recommendation-area" id="mainArea">
             <div class="placeholder">
                 <div class="icon">♫</div>
-                <p>输入一首歌，开始探索</p>
+                <p>输入歌名，或描述你想要的音乐</p>
             </div>
         </div>
 
@@ -525,6 +604,7 @@
         let candidateTimer = null;
         let candidateAbort = null;
 
+        /* ===== 歌名搜索 ===== */
         function startRecommend() {
             const track = document.getElementById('trackInput').value.trim();
             const artist = document.getElementById('artistInput').value.trim();
@@ -581,6 +661,59 @@
                 });
         }
 
+        /* ===== 意图搜索 ===== */
+        function startIntentRecommend() {
+            const query = document.getElementById('intentInput').value.trim();
+            if (!query) { alert('请输入描述'); return; }
+            doIntentRecommend(query);
+        }
+
+        function quickIntent(query) {
+            document.getElementById('intentInput').value = query;
+            doIntentRecommend(query);
+        }
+
+        function doIntentRecommend(query) {
+            const container = document.getElementById('mainArea');
+            container.innerHTML = `<div class="loading-text"><span class="spinner"></span>理解你的意图...</div>`;
+
+            fetch('/api/recommend_by_intent/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ query: query }),
+            })
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    container.innerHTML = `<div class="error-text">${escapeHtml(data.error)}</div>`;
+                    return;
+                }
+                if (!data.results || data.results.length === 0) {
+                    container.innerHTML = '<div class="placeholder"><div class="icon">♫</div><p>没有找到合适的歌</p></div>';
+                    return;
+                }
+                currentResults = data.results;
+                currentIndex = 0;
+                currentQuery = query;
+                currentSeed = data.seed;
+
+                currentResults.forEach(r => {
+                    r._reason = '';
+                    r._feedback = r._feedback || '';
+                });
+
+                renderSong(container);
+            })
+            .catch(err => {
+                container.innerHTML = `<div class="error-text">请求失败: ${escapeHtml(err.message)}</div>`;
+                console.error(err);
+            });
+        }
+
+        /* ===== 渲染歌曲卡片 ===== */
         function renderSong(container) {
             const item = currentResults[currentIndex];
             const total = currentResults.length;
@@ -619,7 +752,7 @@
 
             let html = `
                 <div class="result-header">
-                    <span>与《${escapeHtml(currentQuery)}》相似的歌曲</span>
+                    <span>${escapeHtml(currentQuery)}</span>
                     <span>${currentIndex + 1} / ${total}</span>
                 </div>
                 <div class="reason-box" id="reasonBox">${reasonInner}</div>
@@ -637,10 +770,16 @@
             `;
 
             if (currentSeed) {
+                const tags = currentSeed.lastfm_tags || [];
+                const tagsHtml = tags.length
+                    ? tags.map(t => `<span class="lfm-tag">${escapeHtml(t.name)}</span>`).join('')
+                    : '<span class="lfm-tag-empty">暂无标签</span>';
+
                 html += `
                     <div class="seed-info">
                         种子: ${escapeHtml(currentSeed.track_name)} - ${escapeHtml(currentSeed.artist_name)}
                         (流派: ${escapeHtml(currentSeed.artist_genres)})
+                        <div class="seed-tags">${tagsHtml}</div>
                     </div>
                 `;
             }
@@ -652,6 +791,7 @@
             }
         }
 
+        /* ===== 反馈 ===== */
         function sendFeedback(feedback) {
             const item = currentResults[currentIndex];
             if (!item) return;
@@ -690,6 +830,7 @@
             });
         }
 
+        /* ===== 理由 ===== */
         function loadReasonForCurrentSong() {
             const item = currentResults[currentIndex];
             if (!item) return;
@@ -701,7 +842,7 @@
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    seed_track: currentQuery,
+                    seed_track: currentSeed ? currentSeed.track_name : currentQuery,
                     seed_artist: currentSeed ? currentSeed.artist_name : '',
                     seed_genres: currentSeed ? currentSeed.artist_genres : '',
                     track_name: item.track_name,
@@ -750,7 +891,7 @@
             }
         }
 
-        /* ===== 候选框逻辑 ===== */
+        /* ===== 候选框 ===== */
         function fetchCandidates() {
             const q = document.getElementById('trackInput').value.trim();
             const artist = document.getElementById('artistInput').value.trim();
@@ -772,7 +913,7 @@
                 .then(data => {
                     const list = data.candidates || [];
                     if (list.length === 0) {
-                        dropdown.innerHTML = '<div class="candidate-empty">无匹配歌曲</div>';
+                        dropdown.innerHTML = '<div class="candidate-empty">无匹配歌曲，试试下面的智能推荐</div>';
                         dropdown.classList.add('open');
                         return;
                     }
@@ -830,6 +971,9 @@
             });
             document.getElementById('artistInput').addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') startRecommend();
+            });
+            document.getElementById('intentInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') startIntentRecommend();
             });
 
             document.addEventListener('click', (e) => {

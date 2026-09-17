@@ -4,7 +4,7 @@ import time
 
 
 class OllamaClient:
-    def __init__(self, model="qwen3:4b-instruct-2507-q4_K_M", base_url="http://localhost:11434", num_ctx=8192):
+    def __init__(self, model="qwen3:4b-instruct-2507-q4_K_M", base_url="http://localhost:11434", num_ctx=2048):
         self.model = model
         self.base_url = base_url
         self.num_ctx = num_ctx

@@ -1,92 +1,44 @@
-# check_payload.py
-import requests
-from collections import Counter
-
-QDRANT_URL = "http://localhost:6333"
-COLLECTION = "spotify_tracks"
-
-# 抽样数量
-SAMPLE_SIZE = 2000
-
+# scripts/test_pipeline.py
+from webtest.tag_retriever import multi_recall, select_tags
+from webtest.track_retriever import find_tracks_by_tags
 
 def main():
-    # 1. 取 collection 信息
-    resp = requests.get(f"{QDRANT_URL}/collections/{COLLECTION}")
-    info = resp.json().get("result", {})
-    print(f"Collection: {COLLECTION}")
-    print(f"points_count: {info.get('points_count')}")
-    print(f"vectors_count: {info.get('vectors_count')}")
-    print(f"status: {info.get('status')}")
-    print()
+    queries = [
+        "印度电影歌",
+        "适合跑步听的歌",
+        "失恋了想听点伤感的",
+        "适合开车长途的音乐",
+        "适合咖啡馆放的背景音乐",
+        "想听点暴躁的重金属",
+        "适合睡前放松的纯音乐",
+        "适合冬天听的温暖民谣",
+        "爵士",
+        "来点摇滚",
+        "想听点慵懒的",
+        "韩流",
+        "动漫歌",
+        "健身听的",
+        "助眠",
+    ]
 
-    # 2. 看 payload schema
-    schema = info.get("payload_schema", {})
-    print("Payload schema（已建索引的字段）:")
-    for k, v in schema.items():
-        print(f"  {k}: {v.get('data_type')}")
-    print()
+    for q in queries:
+        print(f"\n{'='*70}")
+        print(f"用户输入：{q}")
 
-    # 3. 抽样看实际字段
-    print(f"抽样 {SAMPLE_SIZE} 条，统计字段出现次数...")
-    field_counter = Counter()
-    sample_values = {}
+        candidates = multi_recall(q, per_path=15)
+        print(f"\n[1] 召回候选：{len(candidates)} 个")
+        for c in candidates[:10]:
+            print(f"    {c['weighted_score']:.3f}  {c['tag']}  ({c['source']})")
 
-    next_offset = None
-    fetched = 0
+        selected = select_tags(q, candidates, top_n=5)
+        print(f"\n[2] 选中标签：{selected}")
 
-    while fetched < SAMPLE_SIZE:
-        payload = {
-            "limit": 100,
-            "with_payload": True,
-            "with_vector": False,
-        }
-        if next_offset is not None:
-            payload["offset"] = next_offset
-
-        resp = requests.post(
-            f"{QDRANT_URL}/collections/{COLLECTION}/points/scroll",
-            json=payload,
-            timeout=30,
-        )
-        result = resp.json().get("result", {})
-        points = result.get("points", [])
-        if not points:
-            break
-
-        for p in points:
-            pl = p.get("payload", {})
-            for k, v in pl.items():
-                field_counter[k] += 1
-                if k not in sample_values:
-                    sample_values[k] = v
-
-        fetched += len(points)
-        next_offset = result.get("next_page_offset")
-        if next_offset is None:
-            break
-
-    print(f"实际抽样 {fetched} 条")
-    print()
-    print("字段出现次数（降序）:")
-    for k, c in field_counter.most_common():
-        pct = c / fetched * 100
-        val = sample_values.get(k)
-        val_str = repr(val)[:60]
-        print(f"  {k:30s} {c:6d} ({pct:5.1f}%)  示例: {val_str}")
-
-    # 4. 重点看有没有年代相关字段
-    print()
-    print("=" * 60)
-    print("年代相关字段检查:")
-    year_fields = [k for k in field_counter if any(
-        s in k.lower() for s in ["year", "date", "release", "decade", "time"]
-    )]
-    if year_fields:
-        for f in year_fields:
-            print(f"  找到: {f}  示例: {repr(sample_values.get(f))[:80]}")
-    else:
-        print("  没有找到任何年代相关字段")
-
+        tracks = find_tracks_by_tags(selected, limit=20)
+        print(f"\n[3] 候选歌曲：{len(tracks)} 首")
+        for t in tracks[:5]:
+            print(f"    {t['track_name']} - {t['artist_name']}")
+            print(f"       流派: {t['artist_genres'][:80]}")
+            print(f"       命中: {t['hit_count']}")
 
 if __name__ == "__main__":
     main()

@@ -14,7 +14,8 @@ from webtest.meting_client import enrich_results_with_netease
 from webtest.reason_generator import generate_recommend_reason
 from webtest.forms import RegisterForm, LoginForm
 from webtest.models import UserProfile
-
+from webtest.tag_retriever import multi_recall, select_tags
+from webtest.track_retriever import find_tracks_by_tags
 # ===================== 配置 =====================
 QDRANT_URL = "http://localhost:6333"
 COLLECTION_NAME = "spotify_tracks"
@@ -424,7 +425,7 @@ def seed_candidates_api(request):
 # ===================== 意图推荐 API =====================
 @csrf_exempt
 def recommend_by_intent_api(request):
-    """LLM 选种子 → 召回 20 条 → LLM 筛 5 条"""
+    """意图推荐：标签召回 → 选标签 → 过滤歌曲 → 直接返回"""
     if request.method != "POST":
         return JsonResponse({"error": "POST required"}, status=405)
 
@@ -434,49 +435,46 @@ def recommend_by_intent_api(request):
         if not query:
             return JsonResponse({"error": "query 不能为空"}, status=400)
 
-        from webtest.llm_recommender import pick_seed, filter_candidates
-
-        # 1. LLM 推荐种子
-        seed_track, seed_artist = pick_seed(query)
-        print(f"[意图推荐] LLM 种子: {seed_track} - {seed_artist}")
-
-        if not seed_track:
-            return JsonResponse({"error": "LLM 未能推荐种子"}, status=500)
-
-        # 2. 召回 20 条（candidate_limit=60，filter_candidates 输出 top_k=20）
-        result = embeat.recommend(
-            track_name=seed_track,
-            artist_name=seed_artist or "",
-            top_k=20,
-            candidate_limit=60,
-        )
-
-        if "error" in result:
-            print(f"[意图推荐] 召回失败: {result.get('error')}")
-            return JsonResponse(result, status=404)
-
-        candidates = result.get("results", [])
+        # 1. 多路召回标签
+        candidates = multi_recall(query, per_path=15)
+        print(f"[意图推荐] 召回标签: {len(candidates)} 个")
         if not candidates:
-            return JsonResponse({"error": "未召回候选"}, status=404)
+            return JsonResponse({"error": "未召回到标签"}, status=404)
 
-        print(f"[意图推荐] 召回 {len(candidates)} 条候选")
+        # 2. LLM 选标签
+        selected = select_tags(query, candidates, top_n=5)
+        print(f"[意图推荐] 选中标签: {selected}")
+        if not selected:
+            return JsonResponse({"error": "未选中标签"}, status=404)
 
-        # 3. LLM 从候选里选 5 条
-        picks = filter_candidates(query, result.get("seed", {}), candidates, top_n=5)
-        picked = [candidates[i] for i in picks]
-
-        print(f"[意图推荐] LLM 选中 {len(picked)} 条")
+        # 3. 标签过滤歌曲
+        tracks = find_tracks_by_tags(selected, limit=20)
+        print(f"[意图推荐] 候选歌曲: {len(tracks)} 首")
+        if not tracks:
+            return JsonResponse({"error": "未找到匹配的歌曲"}, status=404)
 
         # 4. 补网易云链接
-        picked = enrich_results_with_netease(picked)
+        tracks = enrich_results_with_netease(tracks)
 
-        # 5. 附加反馈
-        attach_user_feedback(picked, request.user)
+        # 5. 附加反馈状态
+        attach_user_feedback(tracks, request.user)
+
+        # 6. 构造 seed（用于前端显示）
+        seed = {
+            "track_name": query,
+            "artist_name": "意图推荐",
+            "artist_genres": ", ".join(selected),
+        }
+
+        # 7. 加上 similarity 字段（前端需要）
+        for t in tracks:
+            t.setdefault("similarity", 0)
 
         return JsonResponse({
-            "seed": result.get("seed"),
-            "results": picked,
+            "seed": seed,
+            "results": tracks,
             "reason": "",
+            "selected_tags": selected,
         })
 
     except Exception as e:

@@ -2,7 +2,6 @@
 import json
 import os
 from qdrant_client import QdrantClient
-from sentence_transformers import SentenceTransformer
 from .ollama_client import client
 QDRANT_URL = "http://127.0.0.1:6333"
 COLLECTION = "tag_index"
@@ -89,8 +88,17 @@ KEYWORD_TAG_MAP = {
 
 
 def _get_model():
+    """
+    懒加载句向量模型。
+
+    【为什么必须懒加载】sentence_transformers 会连带 import torch，
+    在内存紧张（<2GB 空闲）时耗时数十秒甚至触发 MemoryError。
+    由于 tag_retriever 被 views 在模块加载期 import，把顶层 import
+    放进函数内可以避免"启动 Django 就卡住"。
+    """
     global _model
     if _model is None:
+        from sentence_transformers import SentenceTransformer
         _model = SentenceTransformer(MODEL_NAME)
     return _model
 

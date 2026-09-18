@@ -1,9 +1,10 @@
 # webtest/meting_client.py
 
 import json
+import os
 import subprocess
 import threading
-import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -93,6 +94,54 @@ class MetingClient:
 _client = None
 _client_lock = threading.Lock()
 
+# ---------------------------------------------------------------------------
+# 进程内 TTL 缓存
+# ---------------------------------------------------------------------------
+# 为什么要缓存：
+#   Meting 的每次查询都是一次 stdio 往返，且被全局锁串行化。
+#   同一首歌（尤其热门歌）会在不同用户的推荐结果里反复出现，
+#   缓存能把这部分开销完全消掉。
+#
+# 正缓存（找到）TTL 较长，负缓存（找不到）TTL 较短 ——
+# 避免"当时没找到"的结论长期生效。
+NET_CACHE_TTL_HIT = 24 * 3600      # 24 小时
+NET_CACHE_TTL_MISS = 6 * 3600      # 6 小时
+NET_MAX_TOTAL_SECONDS = 6.0        # 单次 enrich 的总时间预算上限
+
+_net_cache = {}
+_net_cache_lock = threading.Lock()
+
+
+def _cache_key(track_name, artist_name):
+    return f"{(track_name or '').strip().lower()}||{(artist_name or '').strip().lower()}"
+
+
+def _get_cache(key):
+    with _net_cache_lock:
+        entry = _net_cache.get(key)
+        if not entry:
+            return None
+        if time.time() > entry["expire"]:
+            _net_cache.pop(key, None)
+            return None
+        return entry["data"]
+
+
+def _set_cache(key, data):
+    ttl = NET_CACHE_TTL_HIT if (data or {}).get("netease_url") else NET_CACHE_TTL_MISS
+    with _net_cache_lock:
+        _net_cache[key] = {"data": data, "expire": time.time() + ttl}
+
+
+def net_cache_stats():
+    """返回缓存规模（供评测/诊断使用）"""
+    with _net_cache_lock:
+        now = time.time()
+        live = sum(1 for v in _net_cache.values() if v["expire"] > now)
+        hits = sum(1 for v in _net_cache.values()
+                   if v["expire"] > now and (v["data"] or {}).get("netease_url"))
+        return {"总条目": len(_net_cache), "有效": live, "有链接": hits}
+
 
 def get_client():
     global _client
@@ -117,8 +166,31 @@ def _parse_content(resp):
         return None
 
 
-def search_netease(track_name, artist_name=""):
-    """搜索网易云歌曲，严格匹配歌名+歌手，找不到返回 None"""
+def search_netease(track_name, artist_name="", use_cache=True):
+    """
+    搜索网易云歌曲，严格匹配歌名+歌手，找不到返回 None。
+
+    【缓存内建】缓存放这一层（而不是放在 enrich_results_with_netease 里），
+    这样任何调用方 —— 包括按需获取单首链接的接口 —— 都自动享受缓存。
+    """
+    key = _cache_key(track_name, artist_name)
+
+    if use_cache:
+        hit = _get_cache(key)
+        if hit is not None:
+            # 命中缓存：有 url 返回详情，否则返回 None（负缓存）
+            return hit if hit.get("netease_url") else None
+
+    info = _search_netease_remote(track_name, artist_name)
+
+    if use_cache:
+        _set_cache(key, info or {"netease_url": "", "netease_id": ""})
+
+    return info
+
+
+def _search_netease_remote(track_name, artist_name=""):
+    """真正发起 Meting MCP 查询（无缓存）"""
     try:
         cli = get_client()
         query = f"{track_name} {artist_name}".strip()
@@ -173,32 +245,72 @@ def search_netease(track_name, artist_name=""):
         return None
 
 
-def enrich_results_with_netease(results, max_workers=5):
-    """为推荐结果批量补充网易云跳转链接"""
+def enrich_results_with_netease(results, max_workers=5, timeout=2.5, cache_only=False):
+    """
+    为推荐结果批量补充网易云跳转链接。
+
+    【性能说明】
+    Meting 是"全局单例 MCP 子进程 + 全局锁"的客户端，所有查询实际串行
+    执行（每次一次 stdio 往返）。若对 20 条结果逐条查询，最坏会累积到
+    几十秒 —— 实测曾出现单请求 69 秒。
+
+    因此这里的策略是：
+    1. 先查进程内 TTL 缓存，命中的直接返回（绝大多数重复请求走这条路）
+    2. 只对未命中的条目发起查询，且受总时间预算约束
+    3. 超预算的条目直接留空 —— 网易云链接是"锦上添花"，
+       不应该让推荐主流程为它等待
+
+    Args:
+        max_workers: 保留参数以兼容旧调用（当前实现不再依赖它并行）
+        timeout: 单条查询的等待上限（秒）
+        cache_only: 只读缓存不发起查询（用于对延迟敏感的路径）
+    """
     if not results:
         return results
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = []
-        for item in results:
-            future = executor.submit(
-                search_netease,
-                item.get("track_name", ""),
-                item.get("artist_name", ""),
-            )
-            futures.append((item, future))
+    # 1. 先填缓存命中的
+    pending = []
+    for item in results:
+        key = _cache_key(item.get("track_name", ""), item.get("artist_name", ""))
+        hit = _get_cache(key)
+        if hit:
+            item["netease_url"] = hit["netease_url"]
+            item["netease_id"] = hit["netease_id"]
+        elif cache_only:
+            item["netease_url"] = ""
+            item["netease_id"] = ""
+        else:
+            pending.append(item)
 
-        for item, future in futures:
-            try:
-                info = future.result(timeout=10)
-            except Exception:
-                info = None
+    if not pending:
+        return results
 
-            if info:
-                item["netease_url"] = info["netease_url"]
-                item["netease_id"] = info["netease_id"]
-            else:
-                item["netease_url"] = ""
-                item["netease_id"] = ""
+    # 2. 只对未命中的发起查询，受总预算约束
+    budget = min(timeout * len(pending), NET_MAX_TOTAL_SECONDS)
+    deadline = time.time() + budget
+    done = 0
+    for item in pending:
+        if time.time() >= deadline:
+            item["netease_url"] = ""
+            item["netease_id"] = ""
+            continue
+        try:
+            info = search_netease(item.get("track_name", ""),
+                                  item.get("artist_name", ""))
+        except Exception:
+            info = None
+        if info:
+            item["netease_url"] = info["netease_url"]
+            item["netease_id"] = info["netease_id"]
+            _set_cache(_cache_key(item.get("track_name", ""),
+                                  item.get("artist_name", "")), info)
+        else:
+            item["netease_url"] = ""
+            item["netease_id"] = ""
+            # 负缓存：避免反复为找不到的歌浪费查询预算
+            _set_cache(_cache_key(item.get("track_name", ""),
+                                  item.get("artist_name", "")),
+                       {"netease_url": "", "netease_id": ""})
+        done += 1
 
     return results

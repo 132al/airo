@@ -10,12 +10,13 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import login as auth_login, logout as auth_logout
 from django.contrib.auth.models import User
 from webtest.embeat_similar import EmbeatSimilar
-from webtest.meting_client import enrich_results_with_netease
-from webtest.reason_generator import generate_recommend_reason
+from webtest.meting_client import search_netease
 from webtest.forms import RegisterForm, LoginForm
-from webtest.models import UserProfile
 from webtest.tag_retriever import multi_recall, select_tags
 from webtest.track_retriever import find_tracks_by_tags
+from webtest import profile_service
+from webtest import daily_recommender
+from webtest.ranking import diversity_rerank
 # ===================== 配置 =====================
 QDRANT_URL = "http://localhost:6333"
 COLLECTION_NAME = "spotify_tracks"
@@ -91,11 +92,25 @@ def safe_get(data, *keys, default=None):
     return data
 
 
+def safe_int(value, default=20, lo=1, hi=50):
+    """
+    安全地把请求参数转成受约束的整数。
+
+    修复：原先直接 int(request.GET.get("top_k", 20))，
+    遇到 ?top_k=abc 会抛 ValueError 导致 HTTP 500。
+    """
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, n))
+
+
 # ===================== 推荐 API =====================
 def recommend_api(request):
     track_name = request.GET.get("q", "").strip()
     artist_name = request.GET.get("artist", "").strip()
-    top_k = int(request.GET.get("top_k", 20))
+    top_k = safe_int(request.GET.get("top_k"), default=20, lo=1, hi=50)
 
     if not track_name:
         return JsonResponse({"error": "请提供 q 参数"}, status=400)
@@ -127,18 +142,36 @@ def recommend_api(request):
     result = embeat.recommend(track_name=track_name, artist_name=artist_name, top_k=top_k)
 
     if "results" in result and result["results"]:
-        result["results"] = enrich_results_with_netease(result["results"])
+        # 【不再在此处补网易云链接】
+        # 原同步补链会逐条查询网易云（Meting 串行），实测单请求最高 5.9 秒。
+        # 现改为：列表页不查询，用户点开详情卡片时前端再按需调
+        # POST /api/netease_link/ 获取这一首的链接。
+        for r in result["results"]:
+            r["netease_url"] = ""
+            r["netease_id"] = ""
 
-        # 根据用户档案重排
-        profile = UserProfile.objects.filter(user=user).first()
-        if profile:
-            try:
-                profile_data = json.loads(profile.profile_json or "{}")
-                if profile_data:
-                    result["results"] = personalize_results(result["results"], profile_data)
-                    result["user_summary"] = profile_data.get("llm_summary", "")
-            except Exception:
-                pass
+        # 画像：统一走 profile_service（画像独立化后三条路线共用）
+        # ensure_llm=False：推荐路径不需要 LLM 画像摘要（前端不展示），
+        # 避免为它白白多跑一次模型推理。
+        profile = profile_service.get(user, ensure_llm=False)
+        if profile.get("stage") != "cold":
+            result["results"] = profile_service.apply_personalize_bonus(
+                result["results"], profile
+            )
+
+            # 多样性重排：避免同一歌手/同一子流派刷屏
+            result["results"] = diversity_rerank(
+                result["results"],
+                top_k=top_k,
+                lam=0.85,
+                max_per_artist=2,
+                max_per_genre_idx=8,
+                score_key="_final_score",
+                vector_key="_vector",
+            )
+            # 前端展示用相似度（保留原始声学相似度，不掺杂画像加分）
+            for r in result["results"]:
+                r["similarity"] = r.get("similarity") or 0.0
 
         # 附加当前用户对每首歌的已有反馈
         attach_user_feedback(result["results"], user)
@@ -161,38 +194,97 @@ def attach_user_feedback(results, user):
 
 
 def personalize_results(results, profile_data):
-    """根据用户档案重排推荐结果"""
-    preferred_genres = profile_data.get("preferred_genres", {})
-    disliked_genres = profile_data.get("disliked_genres", {})
-    preferred_artists = profile_data.get("preferred_artists", {})
+    """
+    兼容包装：画像重排逻辑已迁移到 profile_service。
 
-    max_pref = max(preferred_genres.values()) if preferred_genres else 1
-    max_bad = max(disliked_genres.values()) if disliked_genres else 1
-    max_artist = max(preferred_artists.values()) if preferred_artists else 1
+    保留此函数是为了不破坏可能的外部调用；新代码请直接用
+    profile_service.apply_personalize_bonus()。
 
-    for r in results:
-        bonus = 0.0
-        genres = [g.strip().lower() for g in r.get("artist_genres", "").split(",") if g.strip()]
-        artist = r.get("artist_name", "")
+    注意：若传入的是旧的扁平格式画像（preferred_genres 为 dict），
+    这里会先归一化再处理。
+    """
+    profile = _normalize_profile(profile_data)
+    return profile_service.apply_personalize_bonus(results, profile)
 
-        for g in genres:
-            if g in preferred_genres:
-                bonus += (preferred_genres[g] / max_pref) * 0.05
-            if g in disliked_genres:
-                bonus -= (disliked_genres[g] / max_bad) * 0.05
 
-        if artist in preferred_artists:
-            bonus += (preferred_artists[artist] / max_artist) * 0.08
+def _normalize_profile(profile_data):
+    """把旧格式画像（dict 计数）转成新格式，避免直接调用时报错"""
+    if not profile_data:
+        return profile_service.empty_profile()
+    if profile_data.get("schema_version") == profile_service.PROFILE_SCHEMA_VERSION:
+        return profile_data
 
-        base = r.get("final_score")
-        if base is None:
-            base = r.get("similarity", 0.0)
+    def _to_list(d, idx_getter):
+        if not isinstance(d, dict):
+            return []
+        out = []
+        for name, weight in d.items():
+            out.append({"idx": idx_getter(name), "name": name, "weight": float(weight)})
+        out.sort(key=lambda x: -x["weight"])
+        return out
 
-        r["_personal_bonus"] = round(bonus, 4)
-        r["_final_score"] = round(base + bonus, 4)
+    return {
+        "schema_version": profile_service.PROFILE_SCHEMA_VERSION,
+        "stage": "hot",
+        "signal_count": profile_data.get("signal_count", 0),
+        "liked_count": len(profile_data.get("liked_tracks", [])),
+        "preferred_genres": _to_list(profile_data.get("preferred_genres", {}),
+                                     profile_service.genre_idx_of),
+        "disliked_genres": _to_list(profile_data.get("disliked_genres", {}),
+                                    profile_service.genre_idx_of),
+        "preferred_artists": [
+            {"name": n, "weight": float(w)}
+            for n, w in (profile_data.get("preferred_artists", {}) or {}).items()
+        ],
+        "centroid_available": False,
+        "query_text": "",
+        "llm_summary": profile_data.get("llm_summary", ""),
+        "liked_tracks": profile_data.get("liked_tracks", []),
+        "disliked_tracks": profile_data.get("disliked_tracks", []),
+    }
 
-    results.sort(key=lambda x: x["_final_score"], reverse=True)
-    return results
+
+# ===================== 网易云链接 API（按需获取） =====================
+@csrf_exempt
+def netease_link_api(request):
+    """
+    按需获取单首歌的网易云跳转链接。
+
+    【为什么改成按需】
+    原先三条推荐路线都会同步调用 enrich_results_with_netease()，
+    对整批结果逐条查询网易云。由于 Meting MCP 客户端是"全局单例 +
+    全局锁"，所有查询实际串行执行，导致：
+      - 歌名找相似：单请求最高 5.9 秒
+      - 每日推荐：P50 约 1.7 秒
+      - 用户真正点进详情的可能只有 1-2 首，其余查询纯属浪费
+
+    现在改为：**列表页不查询，只有打开歌曲详情卡片时才查这一首**。
+    收益：
+      - 推荐接口耗时下降一个数量级
+      - 网易云查询量下降到原来的 1/20
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        track_name = (data.get("track_name") or "").strip()
+        artist_name = (data.get("artist_name") or "").strip()
+
+        if not track_name:
+            return JsonResponse({"error": "track_name 不能为空"}, status=400)
+
+        from webtest.meting_client import search_netease
+        info = search_netease(track_name, artist_name)
+
+        if info:
+            return JsonResponse({
+                "netease_url": info.get("netease_url", ""),
+                "netease_id": info.get("netease_id", ""),
+            })
+        return JsonResponse({"netease_url": "", "netease_id": "", "found": False})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)
 
 
 # ===================== 理由 API =====================
@@ -204,39 +296,43 @@ def reason_api(request):
 
     try:
         data = json.loads(request.body)
+
+        # 推荐来源决定提示词组织方式：
+        #   seed    -> 歌名找相似（有种子歌）
+        #   profile -> 每日推荐（无种子歌，讲口味契合）
+        #   intent  -> 描述找歌（无种子歌，讲与描述的匹配）
+        mode = data.get("mode", "seed")
+        if mode not in ("seed", "profile", "intent"):
+            mode = "seed"
+
         seed_track = data.get("seed_track", "")
         seed_artist = data.get("seed_artist", "")
         seed_genres = data.get("seed_genres", "")
+        intent_query = data.get("intent_query", "")
 
         rec_track = data.get("track_name", "")
         rec_artist = data.get("artist_name", "")
         rec_genres = data.get("artist_genres", "")
-        sim = float(data.get("similarity", 0))
+        sim = float(data.get("similarity") or 0)
 
-        # 拿当前用户的档案
-        user_summary = ""
-        preferred_genres = {}
-        liked_artists = {}
-        profile = UserProfile.objects.filter(user=request.user).first()
-        if profile:
-            try:
-                profile_data = json.loads(profile.profile_json or "{}")
-                user_summary = profile_data.get("llm_summary", "")
-                preferred_genres = profile_data.get("preferred_genres", {})
-                liked_artists = profile_data.get("preferred_artists", {})
-            except Exception:
-                pass
+        # 画像：走 profile_service 统一结构。
+        # ensure_llm=False：理由生成不需要画像摘要（避免多跑一次 LLM），
+        # 但需要 preferred_genres / preferred_artists 作为事实依据。
+        prof = profile_service.get(request.user, ensure_llm=False)
+        preferred_genres = prof.get("preferred_genres", [])
+        liked_artists = [a.get("name") for a in prof.get("preferred_artists", [])]
 
         from webtest.reason_generator import generate_song_reason
         reason = generate_song_reason(
-            seed_track=seed_track,
-            seed_artist=seed_artist,
-            seed_genres=seed_genres,
             rec_track=rec_track,
             rec_artist=rec_artist,
             rec_genres=rec_genres,
             similarity=sim,
-            user_summary=user_summary,
+            mode=mode,
+            seed_track=seed_track,
+            seed_artist=seed_artist,
+            seed_genres=seed_genres,
+            intent_query=intent_query,
             preferred_genres=preferred_genres,
             liked_artists=liked_artists,
         )
@@ -254,8 +350,7 @@ def feedback_api(request):
         return JsonResponse({"error": "POST required"}, status=405)
 
     try:
-        from webtest.models import UserProfile, UserFeedback
-        from webtest.profile_analyzer import rebuild_profile
+        from webtest.models import UserFeedback
 
         data = json.loads(request.body)
         feedback = data.get("feedback", "")
@@ -280,26 +375,30 @@ def feedback_api(request):
                     "artist_name": data.get("artist_name", ""),
                     "artist_genres": data.get("artist_genres", ""),
                     "feedback": feedback,
+                    "artist_idx": int(data.get("artist_idx") or 0),
+                    "artist_genre_idx": int(data.get("artist_genre_idx") or 0),
                 },
             )
 
-        # 重算档案
-        profile, _ = UserProfile.objects.get_or_create(user=user)
-        profile_data = rebuild_profile(user)
-        profile.profile_json = json.dumps(profile_data, ensure_ascii=False)
-        profile.save()
+        # 重算画像：纯统计 + 时间衰减，毫秒级，不调 LLM
+        # （LLM 摘要由 profile_service.get(ensure_llm=True) 惰性补生成）
+        profile = profile_service.rebuild_profile(user)
 
-        return JsonResponse({"status": "ok"})
+        return JsonResponse({
+            "status": "ok",
+            "stage": profile.get("stage", "cold"),
+            "signal_count": profile.get("signal_count", 0),
+        })
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
 
 
 def feedback_list_api(request):
     """查询当前用户的反馈数据"""
-    from webtest.models import UserFeedback, UserProfile
+    from webtest.models import UserFeedback
 
     feedback_type = request.GET.get("feedback", "").strip()
-    limit = int(request.GET.get("limit", 100))
+    limit = safe_int(request.GET.get("limit"), default=100, lo=1, hi=1000)
 
     user = request.user
     queryset = UserFeedback.objects.filter(user=user).order_by("-created_at")
@@ -315,6 +414,7 @@ def feedback_list_api(request):
         results.append({
             "id": fb.id,
             "user_id": fb.user.username,
+            "track_id": fb.track_id,
             "track_name": fb.track_name,
             "artist_name": fb.artist_name,
             "artist_genres": fb.artist_genres,
@@ -322,24 +422,50 @@ def feedback_list_api(request):
             "created_at": fb.created_at.strftime("%Y-%m-%d %H:%M:%S"),
         })
 
-    profile_data = None
-    profile = UserProfile.objects.filter(user=user).first()
-    if profile:
-        try:
-            profile_data = json.loads(profile.profile_json or "{}")
-        except Exception:
-            profile_data = None
+    # 画像：统一走 profile_service（含流派 idx 与冷启动分档）
+    #
+    # 【性能】ensure_llm=False —— 本页不再同步调用 LLM。
+    # 原因：原来 ensure_llm=True 时，若 llm_summary 为空且 LLM 不可用，
+    # 会在请求中阻塞最长 3×120s，导致"页面一直加载中"，还会堵死
+    # 单线程的 dev server。现在改为：
+    #   - 页面加载：只读已缓存的摘要，恒定毫秒级
+    #   - 需要生成：前端点「生成摘要」按钮 → POST /api/profile/summary/
+    profile = profile_service.get(user, ensure_llm=False)
 
     return JsonResponse({
         "total": total,
         "results": results,
-        "profile": profile_data,
+        "profile": profile,
+        "llm_available": profile_service.llm_available(),
     })
+
+
+@csrf_exempt
+def profile_summary_api(request):
+    """
+    手动触发 LLM 画像摘要生成。
+
+    从反馈页的「生成摘要」按钮调用。因为这是用户**主动**发起的操作，
+    可以接受等待几十秒（前端会显示 loading）。
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+
+    try:
+        user = request.user
+        profile = profile_service.get(user, ensure_llm=True, force_llm=True)
+        return JsonResponse({
+            "status": "ok",
+            "llm_summary": profile.get("llm_summary", ""),
+            "llm_failed": bool(profile.get("llm_failed")),
+        })
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)
 
 
 # ===================== 数据浏览 API =====================
 def data_api(request):
-    limit = int(request.GET.get("limit", 20))
+    limit = safe_int(request.GET.get("limit"), default=20, lo=1, hi=100)
     cursor = request.GET.get("cursor", "").strip()
     track_name = request.GET.get("q", "").strip()
     artist_name = request.GET.get("artist", "").strip()
@@ -453,22 +579,49 @@ def recommend_by_intent_api(request):
         if not tracks:
             return JsonResponse({"error": "未找到匹配的歌曲"}, status=404)
 
-        # 4. 补网易云链接
-        tracks = enrich_results_with_netease(tracks)
+        # 4. 网易云链接改为按需获取（点开详情卡片时才查这一首），
+        #    避免在这里同步逐条查询（Meting 串行，最多耗时数秒）
+        for t in tracks:
+            t["netease_url"] = ""
+            t["netease_id"] = ""
 
-        # 5. 附加反馈状态
+        # 5. 画像融合：给候选打上画像加分并重排
+        #    （修复：原先路线 B 完全不读画像）
+        # ensure_llm=False：不需要 LLM 画像摘要，避免多余的模型推理
+        profile = profile_service.get(request.user, ensure_llm=False)
+        if profile.get("stage") != "cold":
+            score_map = {t.get("track_id"): float(t.get("hit_count") or 0) for t in tracks}
+            tracks = profile_service.apply_personalize_bonus(
+                tracks, profile, score_getter=lambda r: score_map.get(r.get("track_id"), 0.0)
+            )
+            # 归一化相似度，让前端百分比有意义（原先硬编码为 0）
+            top = tracks[0].get("_final_score") or 1.0
+            for t in tracks:
+                t["similarity"] = round((t.get("_final_score") or 0.0) / top, 4) if top else 0.0
+        else:
+            for t in tracks:
+                t.setdefault("similarity", 0)
+
+        # 6. 多样性重排：避免同歌手/同流派刷屏
+        tracks = diversity_rerank(
+            tracks,
+            top_k=len(tracks),
+            lam=0.8,
+            max_per_artist=2,
+            max_per_genre_idx=8,
+            score_key="_final_score" if profile.get("stage") != "cold" else "hit_count",
+            vector_key="_vector",
+        )
+
+        # 7. 附加反馈状态
         attach_user_feedback(tracks, request.user)
 
-        # 6. 构造 seed（用于前端显示）
+        # 8. 构造 seed（用于前端显示）
         seed = {
             "track_name": query,
             "artist_name": "意图推荐",
             "artist_genres": ", ".join(selected),
         }
-
-        # 7. 加上 similarity 字段（前端需要）
-        for t in tracks:
-            t.setdefault("similarity", 0)
 
         return JsonResponse({
             "seed": seed,
@@ -477,6 +630,56 @@ def recommend_by_intent_api(request):
             "selected_tags": selected,
         })
 
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+# ===================== 一键推荐 API（画像 → 歌曲） =====================
+def recommend_for_me_api(request):
+    """
+    一键推荐：不需要任何输入，直接根据用户画像生成推荐。
+
+    - 每次调用结果都不同（偏置随机取样），类似"每日推荐"刷新
+    - 冷启动用户（无反馈）退化为"热门精选 + 多样性"，同样可用
+    - 支持 ?refresh=0 拿到确定性的排序结果（便于调试/评测）
+    """
+    top_k = safe_int(request.GET.get("top_k"), default=20, lo=1, hi=50)
+
+    refresh = request.GET.get("refresh", "1") not in ("0", "false", "False")
+
+    try:
+        user = request.user
+        # ensure_llm=False：一键推荐不需要 LLM 画像摘要（前端不展示）
+        profile = profile_service.get(user, ensure_llm=False)
+
+        result = daily_recommender.recommend(profile, top_k=top_k, refresh=refresh)
+
+        tracks = result.get("results", [])
+        if tracks:
+            # 网易云链接改为按需获取（点开详情卡片时才查），
+            # 避免同步逐条查询拖慢响应（Meting 串行，实测曾达数秒）
+            for t in tracks:
+                t["netease_url"] = ""
+                t["netease_id"] = ""
+            attach_user_feedback(tracks, user)
+
+        seed = daily_recommender.build_seed(profile)
+
+        return JsonResponse({
+            "seed": seed,
+            "results": tracks,
+            "reason": "",
+            "stage": result.get("stage", "cold"),
+            "explore": result.get("explore", False),
+            "channels": result.get("channels", {}),
+            "profile": {
+                "stage": profile.get("stage"),
+                "signal_count": profile.get("signal_count", 0),
+                "preferred_genres": profile_service.to_genre_names(profile, top_n=5),
+            },
+        })
     except Exception as e:
         import traceback
         traceback.print_exc()

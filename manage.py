@@ -3,6 +3,10 @@
 import os
 import sys
 
+# 必须在任何数值/ML 库被导入之前设置运行时环境变量
+# （BLAS 线程限制 + HuggingFace 离线模式），详见 runtime_env.py
+import runtime_env  # noqa: F401
+
 
 def main():
     """Run administrative tasks."""

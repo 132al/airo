@@ -3,195 +3,888 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AIRO</title>
+    <title>AIRO · 音乐推荐</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
         :root {
-            --punch-red: #e63946ff;
-            --honeydew: #f1faeeff;
-            --frosted-blue: #a8dadcff;
-            --cerulean: #457b9dff;
-            --oxford-navy: #1d3557ff;
-            --bg-deep: var(--oxford-navy);
-            --bg-surface: #1f2f4a;
-            --bg-card: rgba(255, 255, 255, 0.04);
-            --bg-card-hover: rgba(255, 255, 255, 0.08);
-            --border-subtle: rgba(255, 255, 255, 0.06);
+            --punch-red: #e63946;
+            --honeydew: #f1faee;
+            --frosted-blue: #a8dadc;
+            --cerulean: #457b9d;
+            --oxford-navy: #1d3557;
+
+            --bg-deep: #0f1c2e;
+            --bg-surface: #16263d;
+            --bg-elevated: #1b2e48;
+            --bg-card: rgba(255, 255, 255, 0.035);
+            --bg-card-hover: rgba(255, 255, 255, 0.07);
+
+            --border-subtle: rgba(255, 255, 255, 0.07);
+            --border-strong: rgba(255, 255, 255, 0.13);
+
             --text-primary: var(--honeydew);
-            --text-secondary: rgba(241, 250, 238, 0.70);
-            --text-muted: rgba(241, 250, 238, 0.35);
+            --text-secondary: rgba(241, 250, 238, 0.68);
+            --text-muted: rgba(241, 250, 238, 0.34);
+
             --accent: var(--punch-red);
-            --accent-glow: rgba(230, 57, 70, 0.20);
-            --radius-card: 16px;
-            --radius-pill: 60px;
-            --transition: 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+            --accent-glow: rgba(230, 57, 70, 0.22);
+            --like: #4ade80;
+            --like-glow: rgba(74, 222, 128, 0.15);
+
+            --radius-sm: 10px;
+            --radius-md: 14px;
+            --radius-lg: 20px;
+            --radius-pill: 999px;
+
+            --transition: 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+            --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.28);
         }
+
+        html { scroll-behavior: smooth; }
+
         body {
-            font-family: 'Inter', -apple-system, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: var(--bg-deep);
             color: var(--text-primary);
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
+            padding: 28px 20px 60px;
             position: relative;
             overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
         }
+
+        /* 背景光晕 */
         body::before {
             content: '';
             position: fixed;
             inset: 0;
             z-index: 0;
-            background-image:
-                radial-gradient(circle at 20px 20px, rgba(168, 218, 220, 0.10) 1px, transparent 1px);
-            background-size: 40px 40px;
+            background:
+                radial-gradient(ellipse 60% 50% at 8% 0%, rgba(230, 57, 70, 0.10) 0%, transparent 60%),
+                radial-gradient(ellipse 55% 45% at 95% 8%, rgba(69, 123, 157, 0.14) 0%, transparent 60%),
+                radial-gradient(ellipse 70% 50% at 50% 100%, rgba(168, 218, 220, 0.05) 0%, transparent 60%);
             pointer-events: none;
         }
+        /* 细网格纹理 */
         body::after {
             content: '';
             position: fixed;
             inset: 0;
             z-index: 0;
-            background:
-                radial-gradient(ellipse at 15% 15%, rgba(230, 57, 70, 0.12) 0%, transparent 50%),
-                radial-gradient(ellipse at 85% 85%, rgba(69, 123, 157, 0.14) 0%, transparent 50%);
+            background-image:
+                linear-gradient(rgba(168, 218, 220, 0.022) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(168, 218, 220, 0.022) 1px, transparent 1px);
+            background-size: 56px 56px;
             pointer-events: none;
+            mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, #000 20%, transparent 75%);
+            -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, #000 20%, transparent 75%);
         }
+
         .app {
-            max-width: 720px;
-            width: 100%;
+            max-width: 880px;
+            margin: 0 auto;
             position: relative;
             z-index: 1;
         }
 
-        .header {
+        /* ===================== 装饰性粒子层 =====================
+           纯视觉效果，与业务功能完全解耦：
+           - pointer-events: none  → 绝不拦截鼠标事件
+           - z-index: 0            → 位于内容层(.app, z-index:1)之下
+           - aria-hidden           → 对屏幕阅读器不可见
+           鼠标移动时粒子会被轻微吸引（详见 particleField）。
+        */
+        #particleLayer {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            display: block;
+        }
+        /* 用户系统开启"减少动态效果"时默认隐藏。
+           注意：这只是"默认值" —— 顶栏的开关会用 .particles-on 覆盖它，
+           让用户能主动启用（纯装饰效果不该被系统设置静默锁死）。 */
+        @media (prefers-reduced-motion: reduce) {
+            #particleLayer:not(.particles-on) { display: none; }
+        }
+
+        /* 粒子被系统设置拦截时的提示条 */
+        .particle-hint {
             display: flex;
+            align-items: center;
             justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
+            gap: 14px;
             flex-wrap: wrap;
-            gap: 12px;
+            padding: 11px 16px;
+            margin-bottom: 18px;
+            border-radius: var(--radius-md);
+            background: rgba(168, 218, 220, 0.08);
+            border: 1px solid rgba(168, 218, 220, 0.22);
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            line-height: 1.6;
         }
-        .brand h1 {
-            font-size: 20px;
-            font-weight: 600;
-            color: var(--text-primary);
-            letter-spacing: -0.3px;
-        }
-        .brand h1 span {
+        .particle-hint button {
+            flex-shrink: 0;
+            padding: 6px 16px;
+            border-radius: var(--radius-pill);
+            border: 1px solid rgba(168, 218, 220, 0.35);
+            background: rgba(168, 218, 220, 0.15);
             color: var(--frosted-blue);
-            font-weight: 300;
+            font-family: inherit;
+            font-size: 12.5px;
+            cursor: pointer;
+            transition: var(--transition);
         }
-        .header-right {
+        .particle-hint button:hover {
+            background: rgba(168, 218, 220, 0.25);
+            border-color: rgba(168, 218, 220, 0.55);
+        }
+
+        /* ===================== 顶栏 ===================== */
+        .topbar {
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 26px;
+            flex-wrap: wrap;
         }
-        .user-badge {
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+        }
+        .brand-mark {
+            width: 36px;
+            height: 36px;
+            border-radius: 11px;
+            background: linear-gradient(135deg, var(--punch-red) 0%, var(--cerulean) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+            box-shadow: 0 4px 16px rgba(230, 57, 70, 0.25);
+        }
+        .brand-text h1 {
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: -0.2px;
+            line-height: 1.2;
+        }
+        .brand-text p {
+            font-size: 11px;
+            color: var(--text-muted);
+            letter-spacing: 0.2px;
+        }
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .user-chip {
+            display: flex;
+            align-items: center;
+            gap: 7px;
             font-size: 12px;
             color: var(--text-secondary);
             background: var(--bg-card);
-            padding: 4px 14px;
+            padding: 6px 13px;
             border-radius: var(--radius-pill);
             border: 1px solid var(--border-subtle);
         }
-        .logout-btn {
+        .user-chip .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--like);
+            box-shadow: 0 0 7px var(--like);
+        }
+        .icon-btn {
             font-size: 12px;
             color: var(--text-muted);
             background: var(--bg-card);
-            padding: 4px 14px;
+            padding: 6px 13px;
             border-radius: var(--radius-pill);
             border: 1px solid var(--border-subtle);
             text-decoration: none;
             cursor: pointer;
             transition: var(--transition);
+            white-space: nowrap;
         }
-        .logout-btn:hover {
+        .icon-btn:hover {
             background: var(--bg-card-hover);
             color: var(--text-primary);
-            border-color: var(--frosted-blue);
+            border-color: var(--border-strong);
         }
 
-        /* ===== 歌名搜索区 ===== */
-        .search-box {
-            position: relative;
-            margin-bottom: 10px;
-        }
-        .search-row {
+        /* ===================== Tab 导航 ===================== */
+        .tabs {
             display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
+            gap: 4px;
+            padding: 4px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-pill);
+            margin-bottom: 22px;
         }
-        .search-row input {
+        .tab {
             flex: 1;
-            min-width: 120px;
-            padding: 10px 16px;
+            padding: 11px 14px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-family: inherit;
+            font-size: 13.5px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: var(--radius-pill);
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            white-space: nowrap;
+        }
+        .tab:hover:not(.active) { color: var(--text-secondary); }
+        .tab.active {
+            background: linear-gradient(135deg, rgba(230, 57, 70, 0.92) 0%, rgba(69, 123, 157, 0.92) 100%);
+            color: #fff;
+            font-weight: 600;
+            box-shadow: 0 4px 18px rgba(230, 57, 70, 0.20);
+        }
+
+        /* ===================== 面板 ===================== */
+        .panel { display: none; animation: panelIn 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
+        .panel.active { display: block; }
+        @keyframes panelIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ---- 每日推荐 hero ---- */
+        .hero {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            padding: 24px 26px;
+            border-radius: var(--radius-lg);
+            background: linear-gradient(120deg, rgba(168, 218, 220, 0.10) 0%, rgba(230, 57, 70, 0.07) 100%);
+            border: 1px solid rgba(168, 218, 220, 0.20);
+            position: relative;
+            overflow: hidden;
+        }
+        .hero::after {
+            content: '';
+            position: absolute;
+            right: -60px;
+            bottom: -70px;
+            width: 220px;
+            height: 220px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(168, 218, 220, 0.09) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .hero-main { min-width: 0; position: relative; z-index: 1; }
+        .hero-title {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            margin-bottom: 6px;
+        }
+        .hero-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            max-width: 430px;
+        }
+        .hero-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 12px;
+        }
+        .hero-tag {
+            font-size: 11px;
+            padding: 3px 11px;
+            border-radius: var(--radius-pill);
+            background: rgba(168, 218, 220, 0.11);
+            color: var(--frosted-blue);
+            border: 1px solid rgba(168, 218, 220, 0.16);
+        }
+        .hero-tag.empty {
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-muted);
+            border-color: var(--border-subtle);
+        }
+        .hero-section-label {
+            font-size: 10.5px;
+            color: var(--text-muted);
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            margin: 20px 0 9px;
+        }
+
+        /* 分组分隔线（替代 emoji 作为视觉锚点） */
+        .section-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 22px 0 12px;
+            font-size: 11px;
+            color: var(--text-muted);
+            letter-spacing: 1.2px;
+        }
+        .section-divider::before,
+        .section-divider::after {
+            content: '';
+            height: 1px;
+            background: var(--border-subtle);
+            flex: 1;
+        }
+        .section-divider::before { flex: 0 0 0; }
+        .section-divider span {
+            padding-left: 0;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            padding: 13px 30px;
+            border: none;
+            border-radius: var(--radius-pill);
+            background: linear-gradient(135deg, var(--punch-red) 0%, #c92f3c 100%);
+            color: #fff;
+            font-family: inherit;
+            font-size: 14.5px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            flex-shrink: 0;
+            position: relative;
+            z-index: 1;
+            box-shadow: 0 6px 22px rgba(230, 57, 70, 0.28);
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 9px 28px rgba(230, 57, 70, 0.38);
+        }
+        .btn-primary:active:not(:disabled) { transform: translateY(0); }
+        .btn-primary:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        /* ---- 输入面板 ---- */
+        .input-panel {
+            padding: 22px 24px;
+            border-radius: var(--radius-lg);
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+        }
+        .input-panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .input-panel-hint {
+            font-size: 12.5px;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+            line-height: 1.6;
+        }
+        .field-row {
+            display: flex;
+            gap: 9px;
+            flex-wrap: wrap;
+            position: relative;
+        }
+        .field {
+            flex: 1;
+            min-width: 150px;
+            padding: 12px 18px;
             border-radius: var(--radius-pill);
             border: 1px solid var(--border-subtle);
-            background: rgba(255, 255, 255, 0.04);
+            background: rgba(255, 255, 255, 0.045);
             color: var(--text-primary);
+            font-family: inherit;
             font-size: 14px;
             outline: none;
             transition: var(--transition);
         }
-        .search-row input::placeholder {
-            color: var(--text-muted);
+        .field::placeholder { color: var(--text-muted); }
+        .field:focus {
+            border-color: rgba(168, 218, 220, 0.55);
+            background: rgba(255, 255, 255, 0.07);
+            box-shadow: 0 0 0 3px rgba(168, 218, 220, 0.10);
         }
-        .search-row input:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px var(--accent-glow);
-        }
-        .search-row button {
-            padding: 10px 22px;
-            border: none;
+        .btn-secondary {
+            padding: 12px 26px;
+            border: 1px solid rgba(168, 218, 220, 0.28);
             border-radius: var(--radius-pill);
-            background: var(--accent);
-            color: var(--honeydew);
+            background: rgba(168, 218, 220, 0.13);
+            color: var(--frosted-blue);
+            font-family: inherit;
             font-size: 14px;
             font-weight: 600;
             cursor: pointer;
             transition: var(--transition);
             flex-shrink: 0;
         }
-        .search-row button:hover {
-            transform: scale(1.02);
-            box-shadow: 0 4px 20px var(--accent-glow);
+        .btn-secondary:hover {
+            background: rgba(168, 218, 220, 0.22);
+            border-color: rgba(168, 218, 220, 0.45);
         }
 
-        /* ===== 候选框 ===== */
+        /* ---- 快捷标签 ---- */
+        .chips-label {
+            font-size: 10.5px;
+            color: var(--text-muted);
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            margin: 18px 0 9px;
+        }
+        .chips { display: flex; gap: 7px; flex-wrap: wrap; }
+        .chip {
+            padding: 6px 14px;
+            border-radius: var(--radius-pill);
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            font-size: 12.5px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .chip:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+            border-color: var(--border-strong);
+            transform: translateY(-1px);
+        }
+
+        /* ===================== 结果区 ===================== */
+        .results-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin: 26px 0 14px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-subtle);
+            flex-wrap: wrap;
+        }
+        .results-title {
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            min-width: 0;
+        }
+        .results-title .q {
+            color: var(--frosted-blue);
+            font-weight: 500;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .results-count {
+            font-size: 11.5px;
+            color: var(--text-muted);
+            padding: 3px 11px;
+            border-radius: var(--radius-pill);
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            flex-shrink: 0;
+        }
+
+        .state-box {
+            text-align: center;
+            padding: 54px 20px;
+            color: var(--text-muted);
+        }
+        .state-box .icon {
+            font-size: 40px;
+            opacity: 0.22;
+            margin-bottom: 14px;
+            line-height: 1;
+        }
+        .state-box .msg { font-size: 14px; margin-bottom: 6px; color: var(--text-secondary); }
+        .state-box .sub { font-size: 12.5px; line-height: 1.6; }
+        .state-box.error .msg { color: #e08b8b; }
+
+        .spinner {
+            display: inline-block;
+            width: 22px;
+            height: 22px;
+            border: 2px solid var(--border-strong);
+            border-top-color: var(--frosted-blue);
+            border-radius: 50%;
+            animation: spin 0.75s linear infinite;
+            vertical-align: middle;
+            margin-right: 11px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ---- 歌词式列表 ---- */
+        .song-list { display: flex; flex-direction: column; gap: 7px; }
+        .row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 13px 16px;
+            border-radius: var(--radius-md);
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+            text-decoration: none;
+            color: inherit;
+        }
+        .row:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--border-strong);
+            transform: translateX(3px);
+        }
+        .row.selected {
+            border-color: rgba(168, 218, 220, 0.42);
+            background: rgba(168, 218, 220, 0.07);
+        }
+        .row-idx {
+            width: 24px;
+            flex-shrink: 0;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+            font-variant-numeric: tabular-nums;
+        }
+        .row-main { flex: 1; min-width: 0; }
+        .row-name {
+            font-size: 14.5px;
+            font-weight: 500;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 3px;
+        }
+        .row-sub {
+            font-size: 12px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .row-sub .sep { color: var(--text-muted); margin: 0 5px; }
+        .row-sub .genres { color: var(--text-muted); }
+        .row-right {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            flex-shrink: 0;
+        }
+        .row-score {
+            font-size: 12.5px;
+            color: var(--frosted-blue);
+            font-variant-numeric: tabular-nums;
+            padding: 3px 9px;
+            border-radius: var(--radius-pill);
+            background: rgba(168, 218, 220, 0.10);
+        }
+        .row-fb {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .row-fb.like { background: var(--like); box-shadow: 0 0 7px var(--like); }
+        .row-fb.dislike { background: var(--punch-red); box-shadow: 0 0 7px var(--punch-red); }
+        .row-fb.none { background: transparent; }
+
+        /* ===================== 详情视图 ===================== */
+        .detail {
+            padding: 26px 28px;
+            border-radius: var(--radius-lg);
+            background: linear-gradient(160deg, rgba(168, 218, 220, 0.055) 0%, rgba(255, 255, 255, 0.02) 100%);
+            border: 1px solid var(--border-subtle);
+            box-shadow: var(--shadow-soft);
+        }
+        .detail-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 18px;
+            margin-bottom: 20px;
+        }
+        .detail-info { min-width: 0; flex: 1; }
+        .detail-name {
+            font-size: 25px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            line-height: 1.25;
+            margin-bottom: 7px;
+        }
+        .detail-artist {
+            font-size: 15px;
+            color: var(--text-secondary);
+            margin-bottom: 9px;
+        }
+        .detail-genres { display: flex; flex-wrap: wrap; gap: 6px; }
+        .genre-pill {
+            font-size: 11px;
+            padding: 3px 11px;
+            border-radius: var(--radius-pill);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+        }
+        .detail-score { flex-shrink: 0; text-align: right; }
+        .detail-score .val {
+            font-size: 30px;
+            font-weight: 700;
+            color: var(--frosted-blue);
+            letter-spacing: -1px;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+        .detail-score .lbl {
+            font-size: 10.5px;
+            color: var(--text-muted);
+            margin-top: 5px;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+        }
+
+        .back-btn {
+            font-size: 12.5px;
+            color: var(--text-muted);
+            background: none;
+            border: none;
+            font-family: inherit;
+            cursor: pointer;
+            padding: 0;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: var(--transition);
+        }
+        .back-btn:hover { color: var(--frosted-blue); }
+
+        .reason-card {
+            padding: 15px 18px;
+            border-radius: var(--radius-md);
+            background: rgba(168, 218, 220, 0.055);
+            border-left: 3px solid var(--frosted-blue);
+            margin-bottom: 18px;
+        }
+        .reason-card .r-label {
+            font-size: 10.5px;
+            color: var(--frosted-blue);
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            opacity: 0.85;
+        }
+        .reason-card .r-body {
+            font-size: 13.5px;
+            color: var(--text-secondary);
+            line-height: 1.72;
+        }
+        .reason-card .r-loading {
+            color: var(--text-muted);
+            font-style: italic;
+            font-size: 13px;
+        }
+
+        .detail-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .fb-btn {
+            padding: 11px 24px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border-subtle);
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 13.5px;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+        .fb-btn:hover:not(:disabled) {
+            background: var(--bg-card-hover);
+            border-color: var(--border-strong);
+            color: var(--text-primary);
+        }
+        .fb-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .fb-btn.on-like {
+            background: var(--like-glow);
+            border-color: rgba(74, 222, 128, 0.5);
+            color: var(--like);
+            opacity: 1;
+            cursor: default;
+        }
+        .fb-btn.on-dislike {
+            background: rgba(230, 57, 70, 0.13);
+            border-color: rgba(230, 57, 70, 0.45);
+            color: var(--punch-red);
+            opacity: 1;
+            cursor: default;
+        }
+        .fb-btn.ghost { color: var(--text-muted); border-style: dashed; }
+        .fb-btn.hide { display: none; }
+
+        .link-out {
+            padding: 11px 22px;
+            border-radius: var(--radius-pill);
+            background: rgba(168, 218, 220, 0.12);
+            border: 1px solid rgba(168, 218, 220, 0.26);
+            color: var(--frosted-blue);
+            font-size: 13px;
+            text-decoration: none;
+            transition: var(--transition);
+            white-space: nowrap;
+        }
+        .link-out:hover {
+            background: rgba(168, 218, 220, 0.20);
+            border-color: rgba(168, 218, 220, 0.42);
+        }
+        .link-out.absent {
+            color: var(--text-muted);
+            background: transparent;
+            border-color: var(--border-subtle);
+            cursor: default;
+            font-size: 12px;
+        }
+        /* 右侧动作组（找相似 + 去网易云听，同一样式） */
+        .detail-actions .spacer { margin-left: auto; }
+        .detail-actions .link-group {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            flex-wrap: wrap;
+        }
+        .link-out.similar {
+            background: rgba(230, 57, 70, 0.10);
+            border-color: rgba(230, 57, 70, 0.28);
+            color: #f08a94;
+        }
+        .link-out.similar:hover {
+            background: rgba(230, 57, 70, 0.18);
+            border-color: rgba(230, 57, 70, 0.45);
+        }
+
+        .detail-foot {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-subtle);
+            flex-wrap: wrap;
+        }
+        .seed-line {
+            font-size: 11.5px;
+            color: var(--text-muted);
+            line-height: 1.6;
+            min-width: 0;
+        }
+        .seed-line b { font-weight: 500; color: var(--text-secondary); }
+        .nav-group { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
+        .nav-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: 1px solid var(--border-subtle);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 16px;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .nav-btn:hover:not(:disabled) {
+            background: var(--accent);
+            border-color: var(--accent);
+            box-shadow: 0 4px 16px var(--accent-glow);
+            transform: scale(1.06);
+        }
+        .nav-btn:disabled { opacity: 0.22; cursor: not-allowed; }
+        .nav-pos {
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
+            min-width: 46px;
+            text-align: center;
+        }
+
+        .notice {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 13px 16px;
+            border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-subtle);
+            font-size: 12.5px;
+            color: var(--text-muted);
+            line-height: 1.65;
+            margin-top: 16px;
+        }
+        .notice.warn {
+            background: rgba(230, 57, 70, 0.06);
+            border-color: rgba(230, 57, 70, 0.20);
+            color: rgba(241, 250, 238, 0.6);
+        }
+
+        /* ===================== 候选下拉 ===================== */
         .candidate-dropdown {
             position: absolute;
-            top: calc(100% + 6px);
+            top: calc(100% + 7px);
             left: 0;
             right: 0;
-            background: var(--bg-surface);
-            border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-            z-index: 50;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-md);
+            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+            z-index: 60;
             max-height: 320px;
             overflow-y: auto;
             display: none;
         }
-        .candidate-dropdown.open {
-            display: block;
-        }
+        .candidate-dropdown.open { display: block; }
         .candidate-item {
-            padding: 10px 16px;
+            padding: 11px 17px;
             cursor: pointer;
             border-bottom: 1px solid var(--border-subtle);
             transition: background 0.15s;
         }
-        .candidate-item:last-child {
-            border-bottom: none;
-        }
-        .candidate-item:hover {
-            background: var(--bg-card-hover);
-        }
+        .candidate-item:last-child { border-bottom: none; }
+        .candidate-item:hover { background: rgba(255, 255, 255, 0.06); }
         .candidate-item .cand-name {
-            font-size: 14px;
+            font-size: 13.5px;
             color: var(--text-primary);
             font-weight: 500;
             white-space: nowrap;
@@ -199,435 +892,354 @@
             text-overflow: ellipsis;
         }
         .candidate-item .cand-sub {
-            font-size: 12px;
+            font-size: 11.5px;
             color: var(--text-muted);
-            margin-top: 2px;
+            margin-top: 3px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
         .candidate-empty {
-            padding: 14px 16px;
+            padding: 16px;
             text-align: center;
-            font-size: 13px;
+            font-size: 12.5px;
             color: var(--text-muted);
         }
 
-        /* ===== 意图搜索区 ===== */
-        .intent-box {
-            margin-bottom: 16px;
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.10);
+            border-radius: 4px;
         }
-        .intent-box .search-row input {
-            flex: 1;
-            min-width: 120px;
-            padding: 10px 16px;
-            border-radius: var(--radius-pill);
-            border: 1px solid var(--border-subtle);
-            background: rgba(255, 255, 255, 0.04);
-            color: var(--text-primary);
-            font-size: 14px;
-            outline: none;
-            transition: var(--transition);
-        }
-        .intent-box .search-row input::placeholder {
-            color: var(--text-muted);
-        }
-        .intent-box .search-row input:focus {
-            border-color: var(--frosted-blue);
-            box-shadow: 0 0 0 3px rgba(168, 218, 220, 0.15);
-        }
-        .intent-box .search-row button {
-            padding: 10px 22px;
-            border: none;
-            border-radius: var(--radius-pill);
-            background: var(--frosted-blue);
-            color: var(--oxford-navy);
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-            flex-shrink: 0;
-        }
-        .intent-box .search-row button:hover {
-            transform: scale(1.02);
-            box-shadow: 0 4px 20px rgba(168, 218, 220, 0.25);
-        }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.18); }
 
-        .quick-chips {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin-bottom: 16px;
-        }
-        .quick-chips span {
-            padding: 6px 16px;
-            border-radius: var(--radius-pill);
-            background: var(--bg-card);
-            border: 1px solid var(--border-subtle);
-            color: var(--text-secondary);
-            font-size: 13px;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-        .quick-chips span:hover {
-            background: var(--bg-card-hover);
-            color: var(--text-primary);
-            border-color: var(--frosted-blue);
-        }
-        .quick-chips span.intent-chip {
-            border-color: rgba(168, 218, 220, 0.25);
-            color: var(--frosted-blue);
-        }
-        .quick-chips span.intent-chip:hover {
-            border-color: var(--frosted-blue);
-            background: rgba(168, 218, 220, 0.08);
-        }
-
-        .recommendation-area {
-            background: rgba(255, 255, 255, 0.02);
-            border-radius: var(--radius-card);
-            border: 1px solid var(--border-subtle);
-            padding: 20px 24px 24px;
-            min-height: 200px;
-            transition: var(--transition);
-            position: relative;
-            backdrop-filter: blur(2px);
-        }
-        .recommendation-area .placeholder {
-            color: var(--text-muted);
-            text-align: center;
-            padding: 30px 0;
-        }
-        .recommendation-area .placeholder .icon {
-            font-size: 36px;
-            margin-bottom: 10px;
-            opacity: 0.25;
-        }
-        .recommendation-area .placeholder p {
-            font-size: 15px;
-        }
-
-        .result-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-            color: var(--text-muted);
-            font-size: 13px;
-        }
-
-        .reason-box {
-            background: rgba(168, 218, 220, 0.06);
-            border-left: 3px solid var(--frosted-blue);
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin-bottom: 12px;
-            font-size: 13px;
-            color: var(--text-secondary);
-            line-height: 1.6;
-            min-height: 44px;
-        }
-        .reason-box .reason-loading {
-            color: var(--text-muted);
-            font-style: italic;
-        }
-
-        .song-card {
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 12px;
-            border: 1px solid var(--border-subtle);
-            transition: var(--transition);
-        }
-        .song-card:hover {
-            border-color: rgba(168, 218, 220, 0.15);
-            background: rgba(255, 255, 255, 0.05);
-        }
-        .song-card .song-link {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            text-decoration: none;
-            color: inherit;
-        }
-        .song-card .song-info {
-            min-width: 0;
-            flex: 1;
-        }
-        .song-card .song-name {
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 4px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .song-card .song-artist {
-            font-size: 14px;
-            color: var(--text-secondary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .song-card .song-genres {
-            font-size: 11px;
-            color: var(--text-muted);
-            margin-top: 6px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .song-card .song-score {
-            font-size: 22px;
-            font-weight: 600;
-            color: var(--frosted-blue);
-            flex-shrink: 0;
-            margin-left: 16px;
-        }
-        .no-link-hint {
-            font-size: 11px;
-            color: var(--text-muted);
-            text-align: center;
-            margin-top: -6px;
-            margin-bottom: 12px;
-            font-style: italic;
-        }
-
-        /* ===== 反馈按钮三态 ===== */
-        .feedback-row {
-            display: flex;
-            justify-content: center;
-            gap: 12px;
-            margin-top: 12px;
-        }
-        .feedback-row button {
-            padding: 8px 20px;
-            border-radius: var(--radius-pill);
-            border: 1px solid var(--border-subtle);
-            background: var(--bg-card);
-            color: var(--text-secondary);
-            font-size: 13px;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-        .feedback-row button:hover:not(:disabled) {
-            background: var(--bg-card-hover);
-            color: var(--text-primary);
-            border-color: var(--frosted-blue);
-        }
-        .feedback-row button:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-        .feedback-row button.active-like {
-            background: rgba(74, 222, 128, 0.15);
-            border-color: #4ade80;
-            color: #4ade80;
-            opacity: 1;
-            cursor: not-allowed;
-        }
-        .feedback-row button.active-dislike {
-            background: rgba(230, 57, 70, 0.15);
-            border-color: var(--accent);
-            color: var(--accent);
-            opacity: 1;
-            cursor: not-allowed;
-        }
-        .feedback-row button.undo-btn {
-            color: var(--text-muted);
-        }
-        .feedback-row button.undo-btn.hidden {
-            visibility: hidden;
-            pointer-events: none;
-        }
-
-        .seed-info .seed-tags {
-            margin-top: 6px;
-            text-align: right;
-        }
-        .seed-info .lfm-tag {
-            display: inline-block;
-            padding: 2px 10px;
-            border-radius: var(--radius-pill);
-            background: rgba(168, 218, 220, 0.12);
-            color: var(--frosted-blue);
-            font-size: 11px;
-            margin-left: 4px;
-            margin-top: 4px;
-        }
-        .seed-info .lfm-tag-empty {
-            color: var(--text-muted);
-            font-size: 11px;
-            font-style: italic;
-        }
-
-        /* ===== 翻页控件 ===== */
-        .pager {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 16px;
-            margin-top: 16px;
-        }
-        .pager button {
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            border: 1px solid var(--border-subtle);
-            background: var(--bg-card);
-            color: var(--text-primary);
-            font-size: 18px;
-            cursor: pointer;
-            transition: var(--transition);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .pager button:hover:not(:disabled) {
-            background: var(--accent);
-            border-color: var(--accent);
-            box-shadow: 0 4px 20px var(--accent-glow);
-            transform: scale(1.05);
-        }
-        .pager button:disabled {
-            opacity: 0.25;
-            cursor: not-allowed;
-        }
-        .pager .page-info {
-            font-size: 14px;
-            color: var(--text-secondary);
-            min-width: 80px;
-            text-align: center;
-        }
-
-        .seed-info {
-            margin-top: 10px;
-            font-size: 11px;
-            color: var(--text-muted);
-            text-align: right;
-            border-top: 1px solid var(--border-subtle);
-            padding-top: 8px;
-        }
-
-        .loading-text {
-            color: var(--text-muted);
-            text-align: center;
-            padding: 30px 0;
-        }
-        .loading-text .spinner {
-            display: inline-block;
-            width: 24px;
-            height: 24px;
-            border: 2px solid var(--border-subtle);
-            border-top: 2px solid var(--frosted-blue);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin-right: 10px;
-            vertical-align: middle;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        .error-text {
-            color: #d48a8a;
-            text-align: center;
-            padding: 30px 0;
-        }
-
-        @media (max-width: 600px) {
-            body { padding: 16px; }
-            .header { flex-direction: column; align-items: flex-start; gap: 8px; }
-            .search-row { flex-direction: column; }
-            .search-row input { width: 100%; }
-            .search-row button { justify-content: center; }
-            .recommendation-area { padding: 16px; }
-            .song-card .song-name { font-size: 16px; }
+        /* ===================== 响应式 ===================== */
+        @media (max-width: 680px) {
+            body { padding: 18px 13px 44px; }
+            .topbar { margin-bottom: 18px; }
+            .brand-text p { display: none; }
+            .tab { font-size: 12px; padding: 10px 8px; }
+            .hero { flex-direction: column; align-items: stretch; padding: 20px; }
+            .btn-primary { justify-content: center; }
+            .input-panel { padding: 18px; }
+            .field-row { flex-direction: column; }
+            .field { width: 100%; }
+            .btn-secondary { width: 100%; }
+            .detail { padding: 20px; }
+            .detail-top { flex-direction: column; gap: 12px; }
+            .detail-score { text-align: left; }
+            .detail-name { font-size: 21px; }
+            .link-out { margin-left: 0; }
+            .row { padding: 11px 13px; gap: 11px; }
+            .row-idx { display: none; }
+            .results-head { flex-direction: column; align-items: flex-start; gap: 8px; }
+            .results-title .q { max-width: 100%; }
         }
     </style>
 </head>
 <body>
+    <!-- 装饰性粒子层：纯视觉，不参与任何交互（pointer-events: none） -->
+    <canvas id="particleLayer" aria-hidden="true"></canvas>
+
     <div class="app">
 
-        <header class="header">
+        <!-- ===================== 顶栏 ===================== -->
+        <header class="topbar">
             <div class="brand">
-                <h1>AIRO <span>· 音乐推荐</span></h1>
+                <div class="brand-mark">A</div>
+                <div class="brand-text">
+                    <h1>AIRO</h1>
+                    <p>AI 音乐推荐</p>
+                </div>
             </div>
-            <div class="header-right">
-                <span class="user-badge">{{ request.user.username }}</span>
-                <a href="/feedback/" class="logout-btn">反馈记录</a>
-                <a href="/logout/" class="logout-btn">登出</a>
+            <div class="topbar-right">
+                <span class="user-chip"><span class="dot"></span>{{ request.user.username }}</span>
+                <a href="/feedback/" class="icon-btn">我的反馈</a>
+                <a href="/logout/" class="icon-btn">登出</a>
             </div>
         </header>
 
-        <!-- 歌名搜索 -->
-        <div class="search-box">
-            <div class="search-row">
-                <input id="trackInput" type="text" placeholder="歌曲名，如 Shape of You" autocomplete="off" />
-                <input id="artistInput" type="text" placeholder="歌手（可选）" autocomplete="off" />
-                <button onclick="startRecommend()">探索</button>
-            </div>
-            <div id="candidateDropdown" class="candidate-dropdown"></div>
-        </div>
+        <!-- ===================== Tab 导航 ===================== -->
+        <nav class="tabs">
+            <button class="tab active" data-tab="daily" onclick="switchTab('daily')">
+                每日推荐
+            </button>
+            <button class="tab" data-tab="seed" onclick="switchTab('seed')">
+                歌名找相似
+            </button>
+            <button class="tab" data-tab="intent" onclick="switchTab('intent')">
+                描述找歌
+            </button>
+        </nav>
 
-        <!-- 意图搜索 -->
-        <div class="intent-box">
-            <div class="search-row">
-                <input id="intentInput" type="text" placeholder="描述你的心情或场景，如：适合下雨天的歌" autocomplete="off" />
-                <button onclick="startIntentRecommend()">智能推荐</button>
+        <!-- ===================== 面板：每日推荐 ===================== -->
+        <section class="panel active" id="panel-daily">
+            <div class="hero">
+                <div class="hero-main">
+                    <div class="hero-title">为你定制的每日推荐</div>
+                    <div class="hero-desc" id="heroDesc">
+                        根据你的口味实时生成，每次点开都是新的一批。喜欢 / 不喜欢用得越多，推荐越准。
+                    </div>
+                    <div class="hero-meta" id="heroMeta"></div>
+                </div>
+                <button class="btn-primary" id="dailyBtn" onclick="doDailyRecommend()">
+                    <span id="dailyBtnText">为我推荐</span>
+                </button>
             </div>
-        </div>
-
-        <div class="quick-chips">
-            <span onclick="quickSearch('Shape of You', 'Ed Sheeran')">Shape of You</span>
-            <span onclick="quickSearch('Blinding Lights', 'The Weeknd')">Blinding Lights</span>
-            <span onclick="quickSearch('Bohemian Rhapsody', 'Queen')">Bohemian Rhapsody</span>
-            <span class="intent-chip" onclick="quickIntent('适合下雨天听的歌')">适合下雨天</span>
-            <span class="intent-chip" onclick="quickIntent('开心的英式流行')">开心的英式流行</span>
-            <span class="intent-chip" onclick="quickIntent('深夜放松的爵士')">深夜放松的爵士</span>
-        </div>
-
-        <div class="recommendation-area" id="mainArea">
-            <div class="placeholder">
-                <div class="icon">♫</div>
-                <p>输入歌名，或描述你想要的音乐</p>
+            <div class="section-divider"><span>推荐依据</span></div>
+            <div class="notice" id="dailyNotice">
+                <span class="n-text">还没有足够的行为数据，当前先为你挑选高质量热门歌曲。
+                给几首歌点「喜欢」，就能解锁基于你口味的专属推荐。</span>
             </div>
-        </div>
+        </section>
+
+        <!-- ===================== 面板：歌名找相似 ===================== -->
+        <section class="panel" id="panel-seed">
+            <div class="input-panel">
+                <div class="input-panel-title">以一首歌为种子，找声学上相似的歌</div>
+                <div class="input-panel-hint">
+                    输入歌名后可从下拉候选里选准确版本；歌手可留空自动匹配。
+                </div>
+                <div class="field-row">
+                    <input id="trackInput" class="field" type="text"
+                           placeholder="歌曲名，如 Shape of You" autocomplete="off" />
+                    <input id="artistInput" class="field" type="text"
+                           placeholder="歌手（可选）" autocomplete="off" style="max-width:200px" />
+                    <button class="btn-secondary" onclick="startRecommend()">找相似</button>
+                    <div id="candidateDropdown" class="candidate-dropdown"></div>
+                </div>
+                <div class="chips-label">试试这些</div>
+                <div class="chips">
+                    <span class="chip" onclick="quickSearch('Shape of You','Ed Sheeran')">Shape of You</span>
+                    <span class="chip" onclick="quickSearch('Blinding Lights','The Weeknd')">Blinding Lights</span>
+                    <span class="chip" onclick="quickSearch('Bohemian Rhapsody','Queen')">Bohemian Rhapsody</span>
+                    <span class="chip" onclick="quickSearch('Take Five','The Dave Brubeck Quartet')">Take Five</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================== 面板：描述找歌 ===================== -->
+        <section class="panel" id="panel-intent">
+            <div class="input-panel">
+                <div class="input-panel-title">用一句话描述你想听的音乐</div>
+                <div class="input-panel-hint">
+                    可以说流派、情绪、场景或年代，系统会先理解意图再挑歌。
+                </div>
+                <div class="field-row">
+                    <input id="intentInput" class="field" type="text"
+                           placeholder="如：适合下雨天听的歌" autocomplete="off" />
+                    <button class="btn-secondary" onclick="startIntentRecommend()">理解并推荐</button>
+                </div>
+                <div class="chips-label">试试这些</div>
+                <div class="chips">
+                    <span class="chip" onclick="quickIntent('适合下雨天听的歌')">适合下雨天</span>
+                    <span class="chip" onclick="quickIntent('开心的英式流行')">开心的英式流行</span>
+                    <span class="chip" onclick="quickIntent('深夜放松的爵士')">深夜放松的爵士</span>
+                    <span class="chip" onclick="quickIntent('适合跑步的高能量音乐')">跑步高能量</span>
+                    <span class="chip" onclick="quickIntent('失恋了想听点伤感的')">失恋伤感</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================== 结果区 ===================== -->
+        <section id="resultSection" style="display:none">
+            <div class="results-head">
+                <div class="results-title">
+                    <span id="resultLabel">推荐结果</span>
+                    <span class="q" id="resultQuery"></span>
+                </div>
+                <span class="results-count" id="resultCount"></span>
+            </div>
+            <div id="mainArea"></div>
+        </section>
 
     </div>
-
     <script>
-        let currentResults = [];
-        let currentIndex = 0;
-        let currentQuery = '';
-        let currentSeed = null;
+        /* ===================== 全局状态 ===================== */
+        let currentResults = [];       // 当前结果列表
+        let currentIndex = 0;          // 详情视图当前索引
+        let currentQuery = '';         // 当前查询展示文案
+        let currentLabel = '推荐结果';  // 结果区标题
+        let currentSeed = null;        // 种子信息（用于理由生成）
+        let currentMode = 'seed';      // 理由模式：seed / profile / intent
+        let currentIntent = '';        // 描述找歌时的原始描述
+        let currentStage = '';         // cold / warm / hot
+        let currentExplore = false;    // 是否冷启动探索模式
+        let currentView = 'list';      // 'list' | 'detail'
         let candidateTimer = null;
         let candidateAbort = null;
 
-        /* ===== 歌名搜索 ===== */
+        const $ = (id) => document.getElementById(id);
+
+        /* ===================== Tab 切换 ===================== */
+        function switchTab(name) {
+            document.querySelectorAll('.tab').forEach(t => {
+                t.classList.toggle('active', t.dataset.tab === name);
+            });
+            document.querySelectorAll('.panel').forEach(p => {
+                p.classList.toggle('active', p.id === 'panel-' + name);
+            });
+            if (name === 'seed') setTimeout(() => $('trackInput').focus(), 60);
+            if (name === 'intent') setTimeout(() => $('intentInput').focus(), 60);
+        }
+
+        /* ===================== 视图切换 ===================== */
+        function showList() {
+            currentView = 'list';
+            renderList();
+        }
+
+        function showDetail(i) {
+            currentIndex = i;
+            currentView = 'detail';
+            renderDetail();
+        }
+
+        function showLoading(msg) {
+            $('resultSection').style.display = 'block';
+            $('resultLabel').textContent = '加载中';
+            $('resultQuery').textContent = '';
+            $('resultCount').textContent = '';
+            $('mainArea').innerHTML =
+                `<div class="state-box"><span class="spinner"></span>${escapeHtml(msg)}</div>`;
+            if (window.innerWidth < 700) {
+                $('resultSection').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        function showError(msg) {
+            $('resultSection').style.display = 'block';
+            $('resultLabel').textContent = '出错了';
+            $('resultQuery').textContent = '';
+            $('resultCount').textContent = '';
+            $('mainArea').innerHTML =
+                `<div class="state-box error"><div class="msg">${escapeHtml(msg)}</div>
+                 <div class="sub">换个说法或换首歌再试试</div></div>`;
+        }
+
+        function showEmpty(msg, sub) {
+            $('resultSection').style.display = 'block';
+            $('mainArea').innerHTML =
+                `<div class="state-box"><div class="msg">${escapeHtml(msg)}</div>
+                 <div class="sub">${escapeHtml(sub || '')}</div></div>`;
+        }
+
+        /**
+         * 统一接收后端返回，重置状态并渲染列表。
+         *
+         * @param {object} data   后端响应
+         * @param {string} label  结果区标题
+         * @param {string} query  结果区副标题（查询展示）
+         * @param {object} opts   { mode, intent } 理由模式与原始描述
+         */
+        function acceptResults(data, label, query, opts) {
+            if (data.error) { showError(data.error); return false; }
+            const list = data.results || [];
+            if (list.length === 0) {
+                showEmpty('没有找到合适的歌', '换个关键词或描述试试');
+                return false;
+            }
+            opts = opts || {};
+            currentResults = list;
+            currentIndex = 0;
+            currentView = 'list';
+            currentQuery = query || '';
+            currentLabel = label || '推荐结果';
+            currentSeed = data.seed || null;
+            currentMode = opts.mode || 'seed';
+            currentIntent = opts.intent || '';
+            currentStage = data.stage || '';
+            currentExplore = !!data.explore;
+            currentResults.forEach(r => {
+                r._reason = '';
+                r._feedback = r._feedback || '';
+                r._loading = false;
+                // 网易云链接按需获取，重置状态标记
+                r._neteaseState = null;
+                r._neteaseLoading = false;
+            });
+            renderList();
+            return true;
+        }
+
+        /* ===================== ① 每日推荐 ===================== */
+        function doDailyRecommend() {
+            const btn = $('dailyBtn');
+            const btnText = $('dailyBtnText');
+            btn.disabled = true;
+            btnText.textContent = '生成中…';
+            showLoading('正在根据你的口味生成…');
+
+            fetch('/api/recommend_for_me/?top_k=20&refresh=1')
+                .then(res => {
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return res.json();
+                })
+                .then(data => {
+                    if (data.profile) updateHero(data.profile);
+                    acceptResults(data, '为你推荐', '', { mode: 'profile' });
+                })
+                .catch(err => showError('请求失败：' + err.message))
+                .finally(() => {
+                    btn.disabled = false;
+                    btnText.textContent = '换一批';
+                });
+        }
+
+        /**
+         * 更新 hero 区的推荐依据标签。
+         *
+         * 【设计决定】只展示流派标签这类客观统计结果，不展示 LLM 生成的
+         * 画像描述（llm_summary）—— 那是内部推断，不适合直接呈现给用户，
+         * 而且模型可能产生不准确的描述。
+         */
+        function updateHero(profile) {
+            const genres = profile.preferred_genres || [];
+            const stage = profile.stage || 'cold';
+            const count = profile.signal_count || 0;
+
+            $('heroMeta').innerHTML = genres.slice(0, 6)
+                .map(g => `<span class="hero-tag">${escapeHtml(g)}</span>`).join('')
+                || '<span class="hero-tag empty">暂无偏好数据</span>';
+
+            const desc = $('heroDesc');
+            const body = $('dailyNotice').querySelector('.n-text');
+
+            if (stage === 'cold') {
+                desc.textContent = '基于你的收听偏好生成，每次刷新都是一批新的推荐。';
+                if (body) {
+                    body.textContent = '目前还没有足够的行为数据，先为你挑选高质量热门歌曲。' +
+                        '给几首歌点「喜欢」，就能解锁更贴合你口味的推荐。';
+                }
+            } else {
+                desc.textContent = `基于你的 ${count} 条行为记录生成，每次刷新都是一批新的推荐。`;
+                if (body) {
+                    body.textContent = '推荐依据：你近期标记为「喜欢」的歌曲所属流派与声学特征。';
+                }
+            }
+        }
+
+        /* ===================== ② 歌名找相似 ===================== */
         function startRecommend() {
-            const track = document.getElementById('trackInput').value.trim();
-            const artist = document.getElementById('artistInput').value.trim();
-            if (!track) { alert('请输入歌曲名'); return; }
+            const track = $('trackInput').value.trim();
+            const artist = $('artistInput').value.trim();
+            if (!track) { $('trackInput').focus(); return; }
             closeDropdown();
             doRecommend(track, artist);
         }
 
         function quickSearch(track, artist) {
-            document.getElementById('trackInput').value = track;
-            document.getElementById('artistInput').value = artist || '';
+            $('trackInput').value = track;
+            $('artistInput').value = artist || '';
             closeDropdown();
             doRecommend(track, artist || '');
         }
 
         function doRecommend(track, artist) {
-            const container = document.getElementById('mainArea');
-            container.innerHTML = `<div class="loading-text"><span class="spinner"></span>搜索中...</div>`;
-
+            showLoading('正在搜索相似歌曲…');
             let url = `/api/recommend/?q=${encodeURIComponent(track)}&top_k=20`;
-            if (artist) {
-                url += `&artist=${encodeURIComponent(artist)}`;
-            }
+            if (artist) url += `&artist=${encodeURIComponent(artist)}`;
 
             fetch(url)
                 .then(res => {
@@ -635,273 +1247,364 @@
                     return res.json();
                 })
                 .then(data => {
-                    if (data.error) {
-                        container.innerHTML = `<div class="error-text">${escapeHtml(data.error)}</div>`;
-                        return;
-                    }
-                    if (!data.results || data.results.length === 0) {
-                        container.innerHTML = '<div class="placeholder"><div class="icon">♫</div><p>没有找到相似歌曲</p></div>';
-                        return;
-                    }
-                    currentResults = data.results;
-                    currentIndex = 0;
-                    currentQuery = track;
-                    currentSeed = data.seed;
-
-                    currentResults.forEach(r => {
-                        r._reason = '';
-                        r._feedback = r._feedback || '';
-                    });
-
-                    renderSong(container);
+                    const s = data.seed || {};
+                    const nm = s.track_name || track;
+                    const ar = s.artist_name || artist;
+                    acceptResults(data, '与它相似', ar ? `${nm} · ${ar}` : nm, { mode: 'seed' });
                 })
-                .catch(err => {
-                    container.innerHTML = `<div class="error-text">请求失败: ${escapeHtml(err.message)}</div>`;
-                    console.error(err);
-                });
+                .catch(err => showError('请求失败：' + err.message));
         }
 
-        /* ===== 意图搜索 ===== */
+        /* ===================== ③ 描述找歌 ===================== */
         function startIntentRecommend() {
-            const query = document.getElementById('intentInput').value.trim();
-            if (!query) { alert('请输入描述'); return; }
+            const query = $('intentInput').value.trim();
+            if (!query) { $('intentInput').focus(); return; }
             doIntentRecommend(query);
         }
 
         function quickIntent(query) {
-            document.getElementById('intentInput').value = query;
+            $('intentInput').value = query;
             doIntentRecommend(query);
         }
 
         function doIntentRecommend(query) {
-            const container = document.getElementById('mainArea');
-            container.innerHTML = `<div class="loading-text"><span class="spinner"></span>理解你的意图...</div>`;
-
+            showLoading('正在理解你的意图…');
             fetch('/api/recommend_by_intent/', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query: query }),
             })
-            .then(res => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                return res.json();
-            })
-            .then(data => {
-                if (data.error) {
-                    container.innerHTML = `<div class="error-text">${escapeHtml(data.error)}</div>`;
-                    return;
-                }
-                if (!data.results || data.results.length === 0) {
-                    container.innerHTML = '<div class="placeholder"><div class="icon">♫</div><p>没有找到合适的歌</p></div>';
-                    return;
-                }
-                currentResults = data.results;
-                currentIndex = 0;
-                currentQuery = query;
-                currentSeed = data.seed;
-
-                currentResults.forEach(r => {
-                    r._reason = '';
-                    r._feedback = r._feedback || '';
-                });
-
-                renderSong(container);
-            })
-            .catch(err => {
-                container.innerHTML = `<div class="error-text">请求失败: ${escapeHtml(err.message)}</div>`;
-                console.error(err);
-            });
+                .then(res => {
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return res.json();
+                })
+                .then(data => {
+                    const tags = data.selected_tags || [];
+                    const label = tags.length
+                        ? '你想要的：' + tags.slice(0, 3).join(' / ')
+                        : '描述找歌';
+                    acceptResults(data, label, query, { mode: 'intent', intent: query });
+                })
+                .catch(err => showError('请求失败：' + err.message));
         }
 
-        /* ===== 渲染歌曲卡片 ===== */
-        function renderSong(container) {
-            const item = currentResults[currentIndex];
-            const total = currentResults.length;
-            const pct = (item.similarity * 100).toFixed(1);
-            const neteaseUrl = item.netease_url || '';
-            const fb = item._feedback || '';
+        /* ===================== 渲染：列表视图 ===================== */
+        function renderList() {
+            const sec = $('resultSection');
+            sec.style.display = 'block';
+            $('resultLabel').textContent = currentLabel;
+            $('resultQuery').textContent = currentQuery;
+            $('resultCount').textContent = `${currentResults.length} 首`;
 
-            const cardContent = `
-                <div class="song-info">
-                    <div class="song-name">${escapeHtml(item.track_name)}</div>
-                    <div class="song-artist">${escapeHtml(item.artist_name)}</div>
-                    <div class="song-genres">${escapeHtml(item.artist_genres || '未知流派')}</div>
-                </div>
-                <div class="song-score">${pct}%</div>
-            `;
+            const notice = buildNotice();
 
-            const cardHtml = neteaseUrl
-                ? `<a class="song-link" href="${escapeHtml(neteaseUrl)}" target="_blank" rel="noopener">${cardContent}</a>`
-                : `<div class="song-link">${cardContent}</div>`;
-            const noLinkHint = !neteaseUrl
-                ? `<div class="no-link-hint">网易云暂无此歌曲的匹配结果</div>`
-                : '';
-
-            let reasonInner = '';
-            if (item._reason) {
-                reasonInner = escapeHtml(item._reason);
-            } else {
-                reasonInner = '<span class="reason-loading">正在生成推荐理由...</span>';
-            }
-
-            const likeClass = fb === 'like' ? 'active-like' : '';
-            const dislikeClass = fb === 'dislike' ? 'active-dislike' : '';
-            const likeDisabled = fb === 'like' ? 'disabled' : '';
-            const dislikeDisabled = fb === 'dislike' ? 'disabled' : '';
-            const undoHidden = fb ? '' : 'hidden';
-
-            let html = `
-                <div class="result-header">
-                    <span>${escapeHtml(currentQuery)}</span>
-                    <span>${currentIndex + 1} / ${total}</span>
-                </div>
-                <div class="reason-box" id="reasonBox">${reasonInner}</div>
-                <div class="song-card">${cardHtml}${noLinkHint}</div>
-                <div class="pager">
-                    <button onclick="prevSong()" ${currentIndex === 0 ? 'disabled' : ''}>‹</button>
-                    <span class="page-info">${currentIndex + 1} / ${total}</span>
-                    <button onclick="nextSong()" ${currentIndex >= total - 1 ? 'disabled' : ''}>›</button>
-                </div>
-                <div class="feedback-row">
-                    <button class="${likeClass}" ${likeDisabled} onclick="sendFeedback('like')">喜欢</button>
-                    <button class="${dislikeClass}" ${dislikeDisabled} onclick="sendFeedback('dislike')">不喜欢</button>
-                    <button class="undo-btn ${undoHidden}" onclick="sendFeedback('undo')">撤销</button>
-                </div>
-            `;
-
-            if (currentSeed) {
-                const tags = currentSeed.lastfm_tags || [];
-                const tagsHtml = tags.length
-                    ? tags.map(t => `<span class="lfm-tag">${escapeHtml(t.name)}</span>`).join('')
-                    : '<span class="lfm-tag-empty">暂无标签</span>';
-
-                html += `
-                    <div class="seed-info">
-                        种子: ${escapeHtml(currentSeed.track_name)} - ${escapeHtml(currentSeed.artist_name)}
-                        (流派: ${escapeHtml(currentSeed.artist_genres)})
-                        <div class="seed-tags">${tagsHtml}</div>
+            const rows = currentResults.map((it, i) => {
+                const fb = it._feedback || '';
+                const pct = Math.round((it.similarity || 0) * 100);
+                const genres = shortGenres(it.artist_genres);
+                return `
+                <div class="row" onclick="showDetail(${i})">
+                    <span class="row-idx">${i + 1}</span>
+                    <div class="row-main">
+                        <div class="row-name">${escapeHtml(it.track_name)}</div>
+                        <div class="row-sub">
+                            ${escapeHtml(it.artist_name)}
+                            ${genres ? `<span class="sep">·</span><span class="genres">${escapeHtml(genres)}</span>` : ''}
+                        </div>
                     </div>
-                `;
-            }
+                    <div class="row-right">
+                        ${pct > 0 ? `<span class="row-score">${pct}%</span>` : ''}
+                        <span class="row-fb ${fb || 'none'}"></span>
+                    </div>
+                </div>`;
+            }).join('');
 
-            container.innerHTML = html;
-
-            if (!item._reason) {
-                loadReasonForCurrentSong();
-            }
+            $('mainArea').innerHTML = notice + `<div class="song-list">${rows}</div>`;
         }
 
-        /* ===== 反馈 ===== */
-        function sendFeedback(feedback) {
-            const item = currentResults[currentIndex];
-            if (!item) return;
-
-            const prev = item._feedback || '';
-
-            item._feedback = feedback === 'undo' ? '' : feedback;
-            renderSong(document.getElementById('mainArea'));
-
-            fetch('/api/feedback/', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    track_id: item.track_id || '',
-                    track_name: item.track_name,
-                    artist_name: item.artist_name,
-                    artist_genres: item.artist_genres,
-                    feedback: feedback,
-                }),
-            })
-            .then(res => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                return res.json();
-            })
-            .then(data => {
-                if (data.error) {
-                    item._feedback = prev;
-                    renderSong(document.getElementById('mainArea'));
-                    alert('反馈失败: ' + data.error);
-                }
-            })
-            .catch(err => {
-                item._feedback = prev;
-                renderSong(document.getElementById('mainArea'));
-                console.error('反馈失败:', err);
-            });
+        /**
+         * 结果区顶部提示。
+         *
+         * 【设计决定】这里不再展示 LLM 生成的用户画像（llm_summary）。
+         * 画像属于内部推断，放进推荐列表会让人感觉"系统在揣测我"，
+         * 也容易因为模型幻觉而产生错误描述。只在需要时展示客观事实。
+         */
+        function buildNotice() {
+            if (currentExplore) {
+                return `<div class="notice"><span class="n-text">当前没有足够的行为数据，
+                        以下为热门精选。多使用「喜欢 / 不喜欢」可以逐步提高推荐准确度。</span></div>`;
+            }
+            return '';
         }
 
-        /* ===== 理由 ===== */
-        function loadReasonForCurrentSong() {
-            const item = currentResults[currentIndex];
-            if (!item) return;
-            if (item._reason) return;
-            if (item._loading) return;
-            item._loading = true;
+        /** 只取前 2 个流派，避免列表行过长 */
+        function shortGenres(g) {
+            if (!g) return '';
+            return g.split(',').map(s => s.trim()).filter(Boolean).slice(0, 2).join(' / ');
+        }
 
-            fetch('/api/reason/', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    seed_track: currentSeed ? currentSeed.track_name : currentQuery,
-                    seed_artist: currentSeed ? currentSeed.artist_name : '',
-                    seed_genres: currentSeed ? currentSeed.artist_genres : '',
-                    track_name: item.track_name,
-                    artist_name: item.artist_name,
-                    artist_genres: item.artist_genres,
-                    similarity: item.similarity,
-                }),
-            })
-            .then(res => res.json())
-            .then(data => {
-                item._loading = false;
-                if (data.reason) {
-                    item._reason = data.reason;
-                    const box = document.getElementById('reasonBox');
-                    if (box && currentResults[currentIndex] === item) {
-                        box.innerHTML = escapeHtml(data.reason);
-                    }
-                } else {
-                    const box = document.getElementById('reasonBox');
-                    if (box && currentResults[currentIndex] === item) {
-                        box.innerHTML = '';
-                    }
-                }
-            })
-            .catch(err => {
-                item._loading = false;
-                console.error('理由加载失败:', err);
-                const box = document.getElementById('reasonBox');
-                if (box && currentResults[currentIndex] === item) {
-                    box.innerHTML = '';
-                }
-            });
+        /* ===================== 渲染：详情视图 ===================== */
+        function renderDetail() {
+            const it = currentResults[currentIndex];
+            if (!it) { showList(); return; }
+
+            const total = currentResults.length;
+            const fb = it._feedback || '';
+            const pct = Math.round((it.similarity || 0) * 100);
+
+            const genres = (it.artist_genres || '')
+                .split(',').map(s => s.trim()).filter(Boolean).slice(0, 5);
+
+            const reasonHtml = it._reason
+                ? escapeHtml(it._reason)
+                : '<span class="r-loading">正在生成推荐理由…</span>';
+
+            // 网易云链接改为「按需获取」：
+            // 列表页不再查询（Meting 串行，实测单请求曾达数秒），
+            // 只有打开这张详情卡片时才请求这一首。
+            // 状态机：undefined（未查）| 'loading' | 'done' | 'absent'
+            let linkHtml;
+            if (it._neteaseState === 'done' && it.netease_url) {
+                linkHtml = `<a class="link-out" href="${escapeHtml(it.netease_url)}"` +
+                    ` target="_blank" rel="noopener">去网易云听 →</a>`;
+            } else if (it._neteaseState === 'absent') {
+                linkHtml = `<span class="link-out absent">网易云暂无匹配</span>`;
+            } else {
+                linkHtml = `<span class="link-out absent">正在查询网易云…</span>`;
+            }
+
+            // 「找相似」：新标签打开首页并带回跳参数，由首页自动切到
+            // 「歌名找相似」Tab 并填入这首歌后触发搜索。
+            const similarUrl = '/?similar=' + encodeURIComponent(it.track_name || '')
+                + '&artist=' + encodeURIComponent(it.artist_name || '')
+                + '&auto=1';
+
+            const undoCls = fb ? '' : ' hide';
+
+            // 底部信息行：只展示客观的推荐依据（种子歌曲），不展示 LLM 画像
+            let seedHtml = '';
+            if (currentSeed && currentSeed.track_name) {
+                seedHtml = `<div class="seed-line">推荐依据：<b>${escapeHtml(currentSeed.track_name)}</b>
+                            ${currentSeed.artist_name ? `· ${escapeHtml(currentSeed.artist_name)}` : ''}
+                            ${currentSeed.artist_genres ? `· ${escapeHtml(currentSeed.artist_genres)}` : ''}</div>`;
+            } else if (currentExplore) {
+                seedHtml = `<div class="seed-line">推荐依据：热门精选</div>`;
+            }
+
+            $('mainArea').innerHTML = `
+                <button class="back-btn" onclick="showList()">‹ 返回列表</button>
+                <div class="detail">
+                    <div class="detail-top">
+                        <div class="detail-info">
+                            <div class="detail-name">${escapeHtml(it.track_name)}</div>
+                            <div class="detail-artist">${escapeHtml(it.artist_name)}</div>
+                            <div class="detail-genres">
+                                ${genres.map(g => `<span class="genre-pill">${escapeHtml(g)}</span>`).join('')}
+                            </div>
+                        </div>
+                        ${pct > 0 ? `<div class="detail-score">
+                            <div class="val">${pct}%</div>
+                            <div class="lbl">匹配度</div>
+                        </div>` : ''}
+                    </div>
+
+                    <div class="reason-card">
+                        <div class="r-label">推荐理由</div>
+                        <div class="r-body" id="reasonBox">${reasonHtml}</div>
+                    </div>
+
+                    <div class="detail-actions">
+                        <button class="fb-btn ${fb === 'like' ? 'on-like' : ''}"
+                                ${fb === 'like' ? 'disabled' : ''}
+                                onclick="sendFeedback('like')">喜欢</button>
+                        <button class="fb-btn ${fb === 'dislike' ? 'on-dislike' : ''}"
+                                ${fb === 'dislike' ? 'disabled' : ''}
+                                onclick="sendFeedback('dislike')">不喜欢</button>
+                        <button class="fb-btn ghost${undoCls}" onclick="sendFeedback('undo')">撤销</button>
+                        <div class="link-group">
+                            <a class="link-out similar" href="${similarUrl}"
+                               target="_blank" rel="noopener">找相似</a>
+                            ${linkHtml}
+                        </div>
+                    </div>
+
+                    <div class="detail-foot">
+                        ${seedHtml}
+                        <div class="nav-group">
+                            <button class="nav-btn" onclick="prevSong()"
+                                    ${currentIndex === 0 ? 'disabled' : ''}>‹</button>
+                            <span class="nav-pos">${currentIndex + 1} / ${total}</span>
+                            <button class="nav-btn" onclick="nextSong()"
+                                    ${currentIndex >= total - 1 ? 'disabled' : ''}>›</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            if (!it._reason) loadReasonForCurrentSong();
+            loadNeteaseLink();
         }
 
         function prevSong() {
-            if (currentIndex > 0) {
-                currentIndex--;
-                renderSong(document.getElementById('mainArea'));
-            }
+            if (currentIndex > 0) { currentIndex--; renderDetail(); }
         }
 
         function nextSong() {
-            if (currentIndex < currentResults.length - 1) {
-                currentIndex++;
-                renderSong(document.getElementById('mainArea'));
-            }
+            if (currentIndex < currentResults.length - 1) { currentIndex++; renderDetail(); }
         }
 
-        /* ===== 候选框 ===== */
-        function fetchCandidates() {
-            const q = document.getElementById('trackInput').value.trim();
-            const artist = document.getElementById('artistInput').value.trim();
-            const dropdown = document.getElementById('candidateDropdown');
+        /* ===================== 反馈 ===================== */
+        function sendFeedback(kind) {
+            const it = currentResults[currentIndex];
+            if (!it) return;
 
-            if (!q) {
-                closeDropdown();
+            const prev = it._feedback || '';
+            it._feedback = kind === 'undo' ? '' : kind;
+            renderDetail();
+
+            fetch('/api/feedback/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    track_id: it.track_id || '',
+                    track_name: it.track_name,
+                    artist_name: it.artist_name,
+                    artist_genres: it.artist_genres,
+                    artist_idx: it.artist_idx || 0,
+                    artist_genre_idx: it.artist_genre_idx || 0,
+                    feedback: kind,
+                }),
+            })
+                .then(res => {
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return res.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        it._feedback = prev;
+                        renderDetail();
+                        showError('反馈失败：' + data.error);
+                    }
+                })
+                .catch(err => {
+                    it._feedback = prev;
+                    renderDetail();
+                    showError('反馈失败：' + err.message);
+                });
+        }
+
+        /* ===================== 逐首生成推荐理由 ===================== */
+        function loadReasonForCurrentSong() {
+            const it = currentResults[currentIndex];
+            if (!it || it._reason || it._loading) return;
+            it._loading = true;
+
+            // mode 决定后端用哪套提示词：
+            //   seed    -> 与种子歌对比（歌名找相似）
+            //   profile -> 讲口味契合（每日推荐，没有种子歌）
+            //   intent  -> 讲与描述的匹配（描述找歌，没有种子歌）
+            fetch('/api/reason/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    mode: currentMode,
+                    seed_track: currentSeed ? currentSeed.track_name : '',
+                    seed_artist: currentSeed ? currentSeed.artist_name : '',
+                    seed_genres: currentSeed ? currentSeed.artist_genres : '',
+                    intent_query: currentIntent,
+                    track_name: it.track_name,
+                    artist_name: it.artist_name,
+                    artist_genres: it.artist_genres,
+                    similarity: it.similarity,
+                }),
+            })
+                .then(res => res.json())
+                .then(data => {
+                    it._loading = false;
+                    it._reason = data.reason || '';
+                    const box = $('reasonBox');
+                    if (box && currentResults[currentIndex] === it && currentView === 'detail') {
+                        box.innerHTML = it._reason
+                            ? escapeHtml(it._reason)
+                            : '<span class="r-loading">暂无理由</span>';
+                    }
+                })
+                .catch(err => {
+                    it._loading = false;
+                    console.error('理由加载失败:', err);
+                    const box = $('reasonBox');
+                    if (box && currentResults[currentIndex] === it && currentView === 'detail') {
+                        box.innerHTML = '<span class="r-loading">理由生成失败</span>';
+                    }
+                });
+        }
+
+        /* ===================== 按需获取网易云链接 ===================== */
+        /**
+         * 打开详情卡片时才查询这一首的网易云链接。
+         *
+         * 为什么不放在推荐接口里：
+         *   Meting MCP 客户端是「全局单例 + 全局锁」，所有查询串行执行。
+         *   对 20 条结果逐条查询，实测单请求最高 5.9 秒；而用户通常
+         *   只会点开 1-2 首，其余 18 次查询纯属浪费。
+         *
+         * 结果缓存在 item._neteaseState，同一首歌翻回来不会重复查询。
+         */
+        function loadNeteaseLink() {
+            const it = currentResults[currentIndex];
+            if (!it) return;
+            // 已查过（成功或确认无匹配）就不再请求
+            if (it._neteaseState === 'done' || it._neteaseState === 'absent') return;
+            if (it._neteaseLoading) return;
+            if (!it.track_name) {
+                it._neteaseState = 'absent';
                 return;
             }
 
+            it._neteaseLoading = true;
+
+            fetch('/api/netease_link/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    track_name: it.track_name,
+                    artist_name: it.artist_name,
+                }),
+            })
+                .then(res => res.json())
+                .then(data => {
+                    it._neteaseLoading = false;
+                    if (data.error) {
+                        it._neteaseState = 'absent';
+                    } else if (data.netease_url) {
+                        it.netease_url = data.netease_url;
+                        it.netease_id = data.netease_id || '';
+                        it._neteaseState = 'done';
+                    } else {
+                        it._neteaseState = 'absent';
+                    }
+                    // 只在用户还停在这首歌时刷新界面
+                    if (currentResults[currentIndex] === it && currentView === 'detail') {
+                        renderDetail();
+                    }
+                })
+                .catch(() => {
+                    it._neteaseLoading = false;
+                    it._neteaseState = 'absent';
+                    const box = document.querySelector('.link-group');
+                    if (box && currentResults[currentIndex] === it && currentView === 'detail') {
+                        renderDetail();
+                    }
+                });
+        }
+
+        /* ===================== 歌名候选下拉 ===================== */
+        function fetchCandidates() {
+            const q = $('trackInput').value.trim();
+            const artist = $('artistInput').value.trim();
+            const dropdown = $('candidateDropdown');
+
+            if (!q) { closeDropdown(); return; }
             if (candidateAbort) candidateAbort.abort();
             candidateAbort = new AbortController();
 
@@ -913,16 +1616,19 @@
                 .then(data => {
                     const list = data.candidates || [];
                     if (list.length === 0) {
-                        dropdown.innerHTML = '<div class="candidate-empty">无匹配歌曲，试试下面的智能推荐</div>';
-                        dropdown.classList.add('open');
-                        return;
+                        dropdown.innerHTML =
+                            '<div class="candidate-empty">没有匹配的歌曲，换个歌名试试</div>';
+                    } else {
+                        dropdown.innerHTML = list.map((c, i) => `
+                            <div class="candidate-item" onclick="selectCandidate(${i})">
+                                <div class="cand-name">${escapeHtml(c.track_name)}</div>
+                                <div class="cand-sub">${escapeHtml(c.artist_name)}${
+                                    c.artist_genres
+                                        ? ' · ' + escapeHtml(c.artist_genres.split(',').slice(0, 2).join(', '))
+                                        : ''
+                                }</div>
+                            </div>`).join('');
                     }
-                    dropdown.innerHTML = list.map((c, i) => `
-                        <div class="candidate-item" onclick="selectCandidate(${i})">
-                            <div class="cand-name">${escapeHtml(c.track_name)}</div>
-                            <div class="cand-sub">${escapeHtml(c.artist_name)}${c.artist_genres ? ' · ' + escapeHtml(c.artist_genres.split(',').slice(0,2).join(', ')) : ''}</div>
-                        </div>
-                    `).join('');
                     dropdown.classList.add('open');
                     window._candidates = list;
                 })
@@ -932,18 +1638,17 @@
                 });
         }
 
-        function selectCandidate(idx) {
-            const list = window._candidates || [];
-            const c = list[idx];
+        function selectCandidate(i) {
+            const c = (window._candidates || [])[i];
             if (!c) return;
-            document.getElementById('trackInput').value = c.track_name;
-            document.getElementById('artistInput').value = c.artist_name;
+            $('trackInput').value = c.track_name;
+            $('artistInput').value = c.artist_name;
             closeDropdown();
             doRecommend(c.track_name, c.artist_name);
         }
 
         function closeDropdown() {
-            document.getElementById('candidateDropdown').classList.remove('open');
+            $('candidateDropdown').classList.remove('open');
         }
 
         function scheduleCandidates() {
@@ -952,42 +1657,485 @@
         }
 
         function escapeHtml(text) {
-            if (!text) return '未知';
+            if (text === null || text === undefined || text === '') return '';
             const d = document.createElement('div');
-            d.textContent = text;
+            d.textContent = String(text);
             return d.innerHTML;
         }
 
+        /* ===================== 初始化 ===================== */
         document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('trackInput').addEventListener('input', scheduleCandidates);
-            document.getElementById('artistInput').addEventListener('input', () => {
-                if (document.getElementById('trackInput').value.trim()) {
-                    scheduleCandidates();
-                }
+            $('trackInput').addEventListener('input', scheduleCandidates);
+            $('artistInput').addEventListener('input', () => {
+                if ($('trackInput').value.trim()) scheduleCandidates();
             });
 
-            document.getElementById('trackInput').addEventListener('keydown', (e) => {
+            $('trackInput').addEventListener('keydown', e => {
                 if (e.key === 'Enter') startRecommend();
             });
-            document.getElementById('artistInput').addEventListener('keydown', (e) => {
+            $('artistInput').addEventListener('keydown', e => {
                 if (e.key === 'Enter') startRecommend();
             });
-            document.getElementById('intentInput').addEventListener('keydown', (e) => {
+            $('intentInput').addEventListener('keydown', e => {
                 if (e.key === 'Enter') startIntentRecommend();
             });
 
-            document.addEventListener('click', (e) => {
-                if (!e.target.closest('.search-box')) closeDropdown();
+            // 点击输入面板外部 → 收起候选框
+            document.addEventListener('click', e => {
+                if (!e.target.closest('#panel-seed')) closeDropdown();
             });
 
-            document.addEventListener('keydown', (e) => {
+            // 键盘：详情视图下 ←/→ 切歌，Esc 返回列表
+            document.addEventListener('keydown', e => {
                 if (currentResults.length === 0) return;
+                if (e.key === 'Escape' && currentView === 'detail') { showList(); return; }
+                if (currentView !== 'detail') return;
                 if (e.key === 'ArrowLeft') prevSong();
                 if (e.key === 'ArrowRight') nextSong();
             });
 
-            document.getElementById('trackInput').focus();
+            // 深链：从「找相似」按钮新标签打开时，自动填好并搜索
+            //   形如 /?similar=Shape+of+You&artist=Ed+Sheeran&auto=1
+            handleDeepLink();
         });
+
+        /**
+         * 处理 URL 参数深链。
+         *
+         * 场景：用户在每日推荐 / 描述找歌里看到一首歌，点「找相似」，
+         * 在新标签打开首页并自动切到「歌名找相似」Tab、填好歌曲名与歌手、
+         * 直接发起一次相似推荐。
+         *
+         * 处理完后用 replaceState 清掉查询串，避免刷新时重复触发搜索。
+         */
+        function handleDeepLink() {
+            const params = new URLSearchParams(window.location.search);
+            const track = (params.get('similar') || '').trim();
+            if (!track) return;
+
+            const artist = (params.get('artist') || '').trim();
+            const auto = params.get('auto') === '1';
+
+            // 清掉参数，保持地址栏干净
+            window.history.replaceState({}, '', window.location.pathname);
+
+            // 切到种子 Tab
+            switchTab('seed');
+            $('trackInput').value = track;
+            $('artistInput').value = artist;
+
+            if (auto) {
+                // 等 DOM 切换完成后再发起请求，避免面板动画期间滚动错位
+                setTimeout(() => doRecommend(track, artist), 80);
+            }
+        }
+
+        /* =====================================================================
+           装饰性粒子场（纯视觉，与业务逻辑零耦合）
+
+           设计约束：
+           - 只读写自己的 canvas，不触碰任何其他 DOM / 全局状态
+           - canvas 是 pointer-events:none，不会影响按钮点击、输入框聚焦
+           - 鼠标位置来自 window 上的被动监听，不拦截、不阻止默认行为
+           - 标签页切到后台时暂停 rAF，不浪费 CPU
+           - 系统开启"减少动态效果"时整体不启动
+           ===================================================================== */
+        /* =====================================================================
+           装饰性粒子层的开关控制
+
+           为什么要这个开关：
+           系统若开启"减少动态效果"（Windows「调整为最佳性能」等），
+           浏览器会上报 prefers-reduced-motion: reduce。粒子层默认会被
+           禁用 —— 但它是纯装饰，不该被系统设置静默锁死且毫无提示。
+           这里提供显式开关 + 被拦截时的提示。
+           ===================================================================== */
+        const PARTICLES_PREF_KEY = 'airo_particles';
+
+        function getParticlesPref() {
+            try { return localStorage.getItem(PARTICLES_PREF_KEY); }
+            catch (e) { return null; }
+        }
+
+        function setParticlesPref(v) {
+            try { localStorage.setItem(PARTICLES_PREF_KEY, v); } catch (e) { /* 忽略 */ }
+        }
+
+        /** 用户点击"开启粒子" → 记住选择并刷新（让引擎按新配置初始化） */
+        function enableParticles() {
+            setParticlesPref('on');
+            window.location.reload();
+        }
+
+        /** 用户点击"关闭粒子" */
+        function disableParticles() {
+            setParticlesPref('off');
+            window.location.reload();
+        }
+
+        /** 恢复为跟随系统设置 */
+        function resetParticles() {
+            try { localStorage.removeItem(PARTICLES_PREF_KEY); } catch (e) { /* 忽略 */ }
+            window.location.reload();
+        }
+
+        /** 顶栏注入粒子开关按钮（注入到 .topbar-right） */
+        function injectParticleToggle(state) {
+            const host = document.querySelector('.topbar-right');
+            if (!host) return;
+
+            let label, handler, title;
+            if (state.blockedBySystem) {
+                label = '开启粒子';
+                handler = 'enableParticles()';
+                title = '系统开启了「减少动画效果」，粒子默认已关闭。点击可强制开启。';
+            } else if (state.disabled) {
+                label = '开启粒子';
+                handler = 'enableParticles()';
+                title = '粒子效果当前已关闭（你之前手动关闭过）。';
+            } else {
+                label = '关闭粒子';
+                handler = 'disableParticles()';
+                title = '点击可关闭背景粒子效果。';
+            }
+
+            const btn = document.createElement('button');
+            btn.className = 'icon-btn';
+            btn.type = 'button';
+            btn.textContent = label;
+            btn.title = title;
+            btn.setAttribute('onclick', handler);
+            host.appendChild(btn);
+
+            // 被系统拦截时，额外给一条可见提示，避免用户"不知道为什么没有效果"
+            if (state.blockedBySystem) {
+                const notice = document.createElement('div');
+                notice.className = 'particle-hint';
+                notice.innerHTML =
+                    '检测到系统开启了「减少动画效果」，背景粒子已默认关闭。' +
+                    '<button type="button" onclick="enableParticles()">强制开启</button>';
+                document.querySelector('.app').prepend(notice);
+            }
+        }
+
+        const particleField = (() => {
+            const canvas = document.getElementById('particleLayer');
+            if (!canvas) return { destroy() {} };
+
+            // 无障碍：系统开启"减少动态效果"时默认不启动。
+            // 但纯装饰效果不该被系统设置静默锁死 —— 用户可用顶栏开关主动启用
+            // （启用后 localStorage 记住选择，刷新后依然生效）。
+            const PREF_KEY = 'airo_particles';
+            const reduceMotion = !!(window.matchMedia
+                && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+            let pref = null;
+            try { pref = localStorage.getItem(PREF_KEY); } catch (e) { pref = null; }
+            // 用户显式选择优先于系统设置
+            const userForced = (pref === 'on');
+            const userDisabled = (pref === 'off');
+
+            if (userDisabled) return { destroy() {}, disabled: true };
+            if (reduceMotion && !userForced) {
+                // 被系统设置拦住，但允许用户手动开启
+                return { destroy() {}, blockedBySystem: true, enable: () => enableParticles() };
+            }
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return { destroy() {} };
+
+            // ---- 配置 ----
+            const CFG = {
+                density: 0.00007,     // 每平方像素的粒子数（↑ 提高密度）
+                minCount: 30,
+                maxCount: 190,
+                maxSpeed: 0.30,       // 基础飘浮速度上限
+                radius: [1.3, 2.0],   // 粒子半径范围（↑ 原来 0.7~2.1 太小）
+                linkDist: 130,        // 粒子间连线的最大距离
+                mouseRadius: 180,     // 鼠标影响半径
+                mousePull: 0.15,     // 吸引强度
+                mousePush: 0.030,     // 内圈斥力（避免全堆在鼠标上）
+                friction: 0.965,      // 速度阻尼
+                maxLinks: 5,          // 每个粒子最多参与几条连线
+            };
+
+            // 配色取自站点设计变量（青蓝为主，少量暖白）
+            // 【可见度】alpha 整体上调 —— 原值在 #0f1c2e 深底上对比度不足
+            const COLORS = [
+                { r: 190, g: 232, b: 234, a: 0.95 },  // frosted-blue 提亮
+                { r: 168, g: 218, b: 220, a: 0.85 },
+                { r: 120, g: 190, b: 220, a: 0.80 },
+                { r: 241, g: 250, b: 238, a: 0.70 },  // honeydew
+            ];
+            const ACCENT = { r: 255, g: 90, b: 105 };  // punch-red 提亮
+            const LINK_ALPHA = 0.34;   // 连线最大透明度（原 0.16 太淡）
+
+            let dpr = 1, W = 0, H = 0;
+            let particles = [];
+            let rafId = null;
+            let running = false;
+            let lastTime = 0;
+
+            // 鼠标状态：默认放屏幕外，避免开场就有吸引
+            const mouse = { x: -9999, y: -9999, active: false };
+
+            const rand = (min, max) => min + Math.random() * (max - min);
+
+            function createParticle() {
+                return {
+                    x: rand(0, W),
+                    y: rand(0, H),
+                    // 基础漂移速度（"一直漂浮"的感觉）
+                    vx: rand(-CFG.maxSpeed, CFG.maxSpeed),
+                    vy: rand(-CFG.maxSpeed, CFG.maxSpeed),
+                    // 鼠标作用产生的额外速度（会衰减回 0）
+                    px: 0,
+                    py: 0,
+                    r: rand(CFG.radius[0], CFG.radius[1]),
+                    color: COLORS[(Math.random() * COLORS.length) | 0],
+                    phase: rand(0, Math.PI * 2),      // 闪烁相位
+                    twinkle: rand(0.35, 0.85),        // 闪烁频率
+                };
+            }
+
+            function resize() {
+                dpr = Math.min(window.devicePixelRatio || 1, 2);  // 上限 2，防 4K 屏过载
+                W = window.innerWidth;
+                H = window.innerHeight;
+                canvas.width = Math.floor(W * dpr);
+                canvas.height = Math.floor(H * dpr);
+                canvas.style.width = W + 'px';
+                canvas.style.height = H + 'px';
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+                // 按面积决定粒子数
+                let count = Math.round(W * H * CFG.density);
+                count = Math.max(CFG.minCount, Math.min(CFG.maxCount, count));
+                particles = [];
+                for (let i = 0; i < count; i++) particles.push(createParticle());
+            }
+
+            function step(dt, now) {
+                const t = now / 1000;
+
+                for (const p of particles) {
+                    // 1) 鼠标吸引：距离越近越强，内圈转为斥力（形成环绕）
+                    if (mouse.active) {
+                        const dx = mouse.x - p.x;
+                        const dy = mouse.y - p.y;
+                        const dist2 = dx * dx + dy * dy;
+                        const R = CFG.mouseRadius;
+                        if (dist2 < R * R && dist2 > 0.01) {
+                            const dist = Math.sqrt(dist2);
+                            const nx = dx / dist;
+                            const ny = dy / dist;
+                            const falloff = 1 - dist / R;   // 线性衰减
+                            const inner = R * 0.34;
+                            if (dist > inner) {
+                                p.px += nx * CFG.mousePull * falloff * dt;
+                                p.py += ny * CFG.mousePull * falloff * dt;
+                            } else {
+                                // 太近就轻推，避免全部堆在光标上变成一个点
+                                p.px -= nx * CFG.mousePush * dt;
+                                p.py -= ny * CFG.mousePush * dt;
+                            }
+                        }
+                    }
+
+                    // 2) 阻尼：鼠标作用消退后回归自由漂浮
+                    p.px *= CFG.friction;
+                    p.py *= CFG.friction;
+
+                    // 3) 位置 = 基础漂移 + 鼠标影响
+                    p.x += (p.vx + p.px) * dt;
+                    p.y += (p.vy + p.py) * dt;
+
+                    // 4) 环绕边界（穿出后从另一侧回来，保持画面均匀）
+                    const pad = 12;
+                    if (p.x < -pad) p.x = W + pad;
+                    else if (p.x > W + pad) p.x = -pad;
+                    if (p.y < -pad) p.y = H + pad;
+                    else if (p.y > H + pad) p.y = -pad;
+
+                    // 5) 闪烁
+                    p._alpha = p.color.a
+                        * (0.55 + 0.45 * Math.sin(t * p.twinkle * 2 + p.phase));
+                }
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, W, H);
+
+                // ---- 连线（先画，压在点下面） ----
+                const dist2Max = CFG.linkDist * CFG.linkDist;
+                const linkCount = new Array(particles.length).fill(0);
+                ctx.lineWidth = 0.6;
+                for (let i = 0; i < particles.length; i++) {
+                    if (linkCount[i] >= CFG.maxLinks) continue;
+                    const a = particles[i];
+                    for (let j = i + 1; j < particles.length; j++) {
+                        if (linkCount[j] >= CFG.maxLinks) continue;
+                        const b = particles[j];
+                        const dx = a.x - b.x;
+                        const dy = a.y - b.y;
+                        const d2 = dx * dx + dy * dy;
+                        if (d2 > dist2Max) continue;
+                        const k = 1 - Math.sqrt(d2) / CFG.linkDist;
+                        ctx.strokeStyle = 'rgba(168, 218, 220, '
+                            + (k * LINK_ALPHA).toFixed(3) + ')';
+                        ctx.beginPath();
+                        ctx.moveTo(a.x, a.y);
+                        ctx.lineTo(b.x, b.y);
+                        ctx.stroke();
+                        linkCount[i]++;
+                        linkCount[j]++;
+                        if (linkCount[i] >= CFG.maxLinks) break;
+                    }
+                }
+
+                // ---- 粒子 ----
+                // 【可见度关键】在深色背景上，纯色圆点对比度不够。
+                // 这里用 shadowBlur 给每个粒子加一圈柔光，形成"发光点"。
+                // 代价：shadowBlur 有性能开销，所以只对粒子使用，不对连线使用。
+                ctx.shadowColor = 'rgba(168, 218, 220, 0.85)';
+                for (const p of particles) {
+                    const alpha = p._alpha != null ? p._alpha : p.color.a;
+                    let radius = p.r;
+                    let cr = p.color.r, cg = p.color.g, cb = p.color.b;
+
+                    // 靠近鼠标时略微放大并向品牌红偏移，给出"被吸引"的反馈
+                    if (mouse.active) {
+                        const dx = mouse.x - p.x;
+                        const dy = mouse.y - p.y;
+                        const d = Math.sqrt(dx * dx + dy * dy);
+                        if (d < CFG.mouseRadius) {
+                            const k = 1 - d / CFG.mouseRadius;
+                            radius = p.r * (1 + k * 0.9);
+                            cr = Math.round(p.color.r + (ACCENT.r - p.color.r) * k * 0.55);
+                            cg = Math.round(p.color.g + (ACCENT.g - p.color.g) * k * 0.55);
+                            cb = Math.round(p.color.b + (ACCENT.b - p.color.b) * k * 0.55);
+                        }
+                    }
+
+                    // 越大越亮的粒子，光晕越强
+                    ctx.shadowBlur = radius * 4.5;
+                    ctx.shadowColor = 'rgba(' + cr + ', ' + cg + ', ' + cb + ', 0.75)';
+
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(' + cr + ', ' + cg + ', ' + cb + ', '
+                        + alpha.toFixed(3) + ')';
+                    ctx.fill();
+                }
+                // 绘制完粒子后关闭阴影，避免影响后续绘制
+                ctx.shadowBlur = 0;
+
+                // ---- 鼠标处的柔光晕（视觉锚点） ----
+                if (mouse.active) {
+                    const R = CFG.mouseRadius * 0.35;
+                    const g = ctx.createRadialGradient(mouse.x, mouse.y, 0, mouse.x, mouse.y, R);
+                    g.addColorStop(0, 'rgba(168, 218, 220, 0.13)');
+                    g.addColorStop(0.55, 'rgba(168, 218, 220, 0.028)');
+                    g.addColorStop(1, 'rgba(168, 218, 220, 0)');
+                    ctx.fillStyle = g;
+                    ctx.beginPath();
+                    ctx.arc(mouse.x, mouse.y, R, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            function loop(now) {
+                if (!running) return;
+                // dt 归一化到 60fps，避免高刷屏上速度变快
+                const dt = Math.min((now - lastTime) / 16.667, 2.5) || 1;
+                lastTime = now;
+                step(dt, now);
+                draw();
+                rafId = requestAnimationFrame(loop);
+            }
+
+            function start() {
+                if (running) return;
+                running = true;
+                lastTime = performance.now();
+                rafId = requestAnimationFrame(loop);
+            }
+
+            function stop() {
+                running = false;
+                if (rafId) cancelAnimationFrame(rafId);
+                rafId = null;
+            }
+
+            // ---- 事件（全部 passive，不阻止默认行为） ----
+            let resizeTimer = null;
+            function onResize() {
+                if (resizeTimer) clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(resize, 160);
+            }
+
+            function onMouseMove(e) {
+                mouse.x = e.clientX;
+                mouse.y = e.clientY;
+                mouse.active = true;
+            }
+
+            function onMouseLeave() {
+                mouse.active = false;
+                mouse.x = -9999;
+                mouse.y = -9999;
+            }
+
+            function onTouchMove(e) {
+                if (e.touches && e.touches[0]) {
+                    mouse.x = e.touches[0].clientX;
+                    mouse.y = e.touches[0].clientY;
+                    mouse.active = true;
+                }
+            }
+
+            function onVisibility() {
+                // 标签页不可见时暂停，避免后台空转耗电
+                if (document.hidden) stop();
+                else start();
+            }
+
+            function init() {
+                resize();
+                start();
+                window.addEventListener('resize', onResize, { passive: true });
+                window.addEventListener('mousemove', onMouseMove, { passive: true });
+                window.addEventListener('mouseout', onMouseLeave, { passive: true });
+                window.addEventListener('touchmove', onTouchMove, { passive: true });
+                window.addEventListener('touchend', onMouseLeave, { passive: true });
+                document.addEventListener('visibilitychange', onVisibility);
+            }
+
+            function destroy() {
+                stop();
+                if (resizeTimer) clearTimeout(resizeTimer);
+                window.removeEventListener('resize', onResize);
+                window.removeEventListener('mousemove', onMouseMove);
+                window.removeEventListener('mouseout', onMouseLeave);
+                window.removeEventListener('touchmove', onTouchMove);
+                window.removeEventListener('touchend', onMouseLeave);
+                document.removeEventListener('visibilitychange', onVisibility);
+                ctx.clearRect(0, 0, W, H);
+            }
+
+            init();
+            // 加 .particles-on，用于覆盖 CSS 里 prefers-reduced-motion 的隐藏规则
+            canvas.classList.add('particles-on');
+            return { destroy, start, stop, enabled: true };
+        })();
+
+        /* 根据粒子层状态，在顶栏注入开关 / 在被系统拦截时给出提示 */
+        (function initParticleToggle() {
+            const state = particleField || {};
+            injectParticleToggle({
+                blockedBySystem: !!state.blockedBySystem,
+                disabled: !!state.disabled,
+            });
+        })();
     </script>
 </body>
 </html>

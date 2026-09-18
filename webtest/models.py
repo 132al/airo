@@ -4,19 +4,6 @@ from django.db import models
 from django.contrib.auth.models import User
 
 
-class MusicKnowledge(models.Model):
-    """音乐知识库（映射到 music.db 的 music_knowledge 表）"""
-    entity = models.CharField(max_length=500)
-    text = models.TextField()
-    url = models.CharField(max_length=500, blank=True)
-    entity_type = models.CharField(max_length=50, blank=True)
-
-    class Meta:
-        managed = False
-        db_table = 'music_knowledge'
-        app_label = 'webtest'
-
-
 class UserProfile(models.Model):
     """用户档案"""
     user = models.OneToOneField(
@@ -46,6 +33,10 @@ class UserFeedback(models.Model):
     artist_name = models.CharField(max_length=200)
     artist_genres = models.CharField(max_length=500, default="")
     feedback = models.CharField(max_length=20)  # like / dislike
+    # Embeat 归类索引：Qdrant 里对这两个字段建了 integer 索引，可直接用于过滤/扩散召回。
+    # 反馈时由前端带上（Qdrant payload 本就返回这两个字段）。
+    artist_idx = models.IntegerField(default=0)
+    artist_genre_idx = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

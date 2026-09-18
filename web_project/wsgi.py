@@ -9,6 +9,9 @@ https://docs.djangoproject.com/en/6.1/howto/deployment/wsgi/
 
 import os
 
+# 必须在 django / 数值库之前设置运行时环境（BLAS 线程 + HF 离线），详见 runtime_env.py
+import runtime_env  # noqa: F401
+
 from django.core.wsgi import get_wsgi_application
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'web_project.settings')

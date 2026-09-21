@@ -518,11 +518,19 @@ def _should_retry_llm(profile):
 def save(user, profile):
     """画像写回数据库"""
     from webtest.models import UserProfile
+    from webtest.db_retry import with_retry
 
-    obj, _ = UserProfile.objects.get_or_create(user=user)
-    obj.profile_json = json.dumps(profile, ensure_ascii=False)
-    obj.save()
+    # get_or_create + save 是"读-改-写"，多用户并发时会撞 SQLite 写锁
+    # （详见 webtest/db_retry.py），故包一层重试
+    @with_retry
+    def _write():
+        obj, _ = UserProfile.objects.get_or_create(user=user)
+        obj.profile_json = json.dumps(profile, ensure_ascii=False)
+        obj.save()
+
+    _write()
     return profile
+
 
 
 # ============================================================

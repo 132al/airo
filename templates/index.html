@@ -955,8 +955,10 @@
             </div>
             <div class="topbar-right">
                 <span class="user-chip"><span class="dot"></span>{{ request.user.username }}</span>
+                <a href="/data/" class="icon-btn">数据浏览</a>
                 <a href="/feedback/" class="icon-btn">我的反馈</a>
                 <a href="/logout/" class="icon-btn">登出</a>
+
             </div>
         </header>
 
@@ -1300,7 +1302,6 @@
 
             const rows = currentResults.map((it, i) => {
                 const fb = it._feedback || '';
-                const pct = Math.round((it.similarity || 0) * 100);
                 const genres = shortGenres(it.artist_genres);
                 return `
                 <div class="row" onclick="showDetail(${i})">
@@ -1313,7 +1314,6 @@
                         </div>
                     </div>
                     <div class="row-right">
-                        ${pct > 0 ? `<span class="row-score">${pct}%</span>` : ''}
                         <span class="row-fb ${fb || 'none'}"></span>
                     </div>
                 </div>`;
@@ -1350,7 +1350,6 @@
 
             const total = currentResults.length;
             const fb = it._feedback || '';
-            const pct = Math.round((it.similarity || 0) * 100);
 
             const genres = (it.artist_genres || '')
                 .split(',').map(s => s.trim()).filter(Boolean).slice(0, 5);
@@ -1402,10 +1401,6 @@
                                 ${genres.map(g => `<span class="genre-pill">${escapeHtml(g)}</span>`).join('')}
                             </div>
                         </div>
-                        ${pct > 0 ? `<div class="detail-score">
-                            <div class="val">${pct}%</div>
-                            <div class="lbl">匹配度</div>
-                        </div>` : ''}
                     </div>
 
                     <div class="reason-card">
@@ -1845,7 +1840,7 @@
 
             // ---- 配置 ----
             const CFG = {
-                density: 0.00007,     // 每平方像素的粒子数（↑ 提高密度）
+                density: 0.0007,     // 每平方像素的粒子数（↑ 提高密度）
                 minCount: 30,
                 maxCount: 190,
                 maxSpeed: 0.30,       // 基础飘浮速度上限

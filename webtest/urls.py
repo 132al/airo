@@ -10,6 +10,7 @@ urlpatterns = [
     path('api/netease_link/', views.netease_link_api, name='netease_link_api'),
     path('api/feedback/', views.feedback_api, name='feedback_api'),
     path('api/feedback/list/', views.feedback_list_api, name='feedback_list_api'),
+    path('api/playlist/import/', views.import_playlist_api, name='import_playlist_api'),
     path('api/profile/summary/', views.profile_summary_api, name='profile_summary_api'),
     path('feedback/', views.feedback_page, name='feedback_page'),
     path('login/', views.login_view, name='login'),

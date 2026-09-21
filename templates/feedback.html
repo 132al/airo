@@ -145,6 +145,76 @@
         .filter-row button:hover {
             transform: scale(1.02);
         }
+        /* ---- 歌单导入 ---- */
+        .hint {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin: -6px 0 14px;
+            line-height: 1.6;
+        }
+        .import-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .import-row input {
+            flex: 1 1 320px;
+            min-width: 220px;
+            padding: 10px 16px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border-subtle);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+        }
+        .import-row input:focus {
+            border-color: var(--accent);
+        }
+        .import-row input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+        .import-row select {
+            padding: 10px 16px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border-subtle);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+        }
+        .import-row select option {
+            background: var(--bg-surface);
+            color: var(--text-primary);
+        }
+        .import-row button {
+            padding: 10px 28px;
+            border-radius: var(--radius-pill);
+            border: none;
+            background: var(--accent);
+            color: var(--honeydew);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .import-row button:hover:not(:disabled) {
+            transform: scale(1.02);
+        }
+        .import-row button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .import-msg {
+            margin-top: 12px;
+            font-size: 13px;
+            line-height: 1.7;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+        }
+        .import-msg.ok { color: var(--accent); }
+        .import-msg.err { color: #ff8b8b; }
         .panel {
             background: var(--bg-card);
             border: 1px solid var(--border-subtle);
@@ -272,6 +342,23 @@
             <div id="profileBox" class="empty">加载中...</div>
         </div>
 
+        <div class="panel">
+            <h2>导入歌单</h2>
+            <p class="hint">粘贴网易云/QQ音乐的歌单链接或 ID，把歌单里的歌作为你的已有偏好。</p>
+            <div class="import-row">
+                <input type="text" id="playlistInput" placeholder="歌单链接或 ID，如 3778678 或 https://music.163.com/#/playlist?id=3778678">
+                <select id="platformSelect">
+                    <option value="">自动识别</option>
+                    <option value="netease">网易云</option>
+                    <option value="tencent">QQ音乐</option>
+                    <option value="kugou">酷狗</option>
+                    <option value="kuwo">酷我</option>
+                </select>
+                <button id="importBtn" onclick="importPlaylist()">导入</button>
+            </div>
+            <div id="importMsg" class="import-msg"></div>
+        </div>
+
         <div class="filter-row">
             <select id="typeFilter">
                 <option value="">全部类型</option>
@@ -290,6 +377,70 @@
     </div>
 
     <script>
+        function importPlaylist() {
+            const input = document.getElementById('playlistInput');
+            const platform = document.getElementById('platformSelect').value;
+            const btn = document.getElementById('importBtn');
+            const msg = document.getElementById('importMsg');
+
+            const val = (input.value || '').trim();
+            if (!val) {
+                msg.className = 'import-msg err';
+                msg.textContent = '请先填入歌单链接或 ID';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = '导入中...';
+            msg.className = 'import-msg';
+            msg.textContent = '正在读取歌单并匹配曲库，请稍候（较大歌单可能需要十几秒）...';
+
+            const body = { playlist: val, limit: 200 };
+            if (platform) body.platform = platform;
+
+            fetch('/api/playlist/import/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            })
+                .then(res => res.json().then(d => ({ ok: res.ok, data: d })))
+                .then(({ ok, data }) => {
+                    if (!ok || !data.ok) {
+                        msg.className = 'import-msg err';
+                        msg.textContent = '导入失败：' + escapeHtml(data.error || '未知错误');
+                        return;
+                    }
+                    msg.className = 'import-msg ok';
+                    const lines = [
+                        '导入完成：新增 ' + data.imported + ' 首，跳过 ' + data.skipped +
+                        ' 首（共 ' + data.total + ' 首）',
+                        '画像状态：' + data.stage + '　信号数：' + data.signal_count
+                    ];
+                    const skipped = (data.songs || []).filter(s => s.status === 'skipped');
+                    if (skipped.length) {
+                        lines.push('跳过原因（多为曲库未收录）：');
+                        skipped.slice(0, 8).forEach(s => {
+                            lines.push('  · ' + s.name + ' - ' + (s.artist || '') +
+                                       (s.reason ? '（' + s.reason + '）' : ''));
+                        });
+                        if (skipped.length > 8) {
+                            lines.push('  ... 另有 ' + (skipped.length - 8) + ' 首');
+                        }
+                    }
+                    msg.textContent = lines.join('\n');
+                    input.value = '';
+                    loadData();
+                })
+                .catch(err => {
+                    msg.className = 'import-msg err';
+                    msg.textContent = '导入失败：' + escapeHtml(err.message);
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.textContent = '导入';
+                });
+        }
+
         function loadData() {
             const type = document.getElementById('typeFilter').value;
 

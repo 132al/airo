@@ -169,16 +169,48 @@ def recommend_api(request):
                 score_key="_final_score",
                 vector_key="_vector",
             )
-            # 前端展示用相似度（保留原始声学相似度，不掺杂画像加分）
-            for r in result["results"]:
-                r["similarity"] = r.get("similarity") or 0.0
+            # 前端展示用相似度：优先用去均值校准值（可解释、随机基线≈0），
+            # 校准不可用时才退回原始余弦。见 webtest/vector_calibration.py
+            # （统一由 _attach_sim_percent 处理，见下方调用）
+
+        # 注意：这段要放在 stage 分支之外，冷启动用户也需要相似度展示
+        _attach_sim_percent(result["results"])
 
         # 附加当前用户对每首歌的已有反馈
         attach_user_feedback(result["results"], user)
 
+
         result["reason"] = ""
 
     return JsonResponse(result)
+
+
+def _attach_sim_percent(results):
+    """
+    给每条结果附上"可解释的相似度百分比" sim_percent。
+
+    为什么不能用 similarity*100：
+      本库 64 维向量全为正数，共同基线把任意两首的余弦抬到 ~0.986
+      （实测随机对 mean=0.9862, sd=0.0049），所以 0.997 → "99.7%" 是
+      几何伪影，随机抽也有 98.6%。详见 webtest/vector_calibration.py。
+
+    这里优先用去均值后的 cal_similarity 映射到 0~100
+    （实测随机≈0、推荐≈0.2~0.8），校准不可用时才退回原始余弦。
+    """
+    if not results:
+        return
+    try:
+        from .vector_calibration import to_percent
+    except Exception:
+        to_percent = None
+
+    for r in results:
+        r["similarity"] = r.get("similarity") or 0.0
+        cal = r.get("cal_similarity")
+        if to_percent and cal is not None:
+            r["sim_percent"] = to_percent(cal)
+        else:
+            r["sim_percent"] = round(float(r.get("similarity") or 0) * 100, 1)
 
 
 def attach_user_feedback(results, user):
@@ -364,25 +396,35 @@ def feedback_api(request):
 
         user = request.user
 
-        if feedback == "undo":
-            UserFeedback.objects.filter(user=user, track_id=track_id).delete()
-        else:
-            UserFeedback.objects.update_or_create(
-                user=user,
-                track_id=track_id,
-                defaults={
-                    "track_name": data.get("track_name", ""),
-                    "artist_name": data.get("artist_name", ""),
-                    "artist_genres": data.get("artist_genres", ""),
-                    "feedback": feedback,
-                    "artist_idx": int(data.get("artist_idx") or 0),
-                    "artist_genre_idx": int(data.get("artist_genre_idx") or 0),
-                },
-            )
+        # 写操作包一层"锁冲突重试"：
+        # SQLite 单写者，多用户同时点赞会撞 "database is locked"，
+        # 且 Django 的 BEGIN(deferred) 模式下 busy_timeout 不生效。
+        # 详见 webtest/db_retry.py
+        from webtest.db_retry import with_retry
 
-        # 重算画像：纯统计 + 时间衰减，毫秒级，不调 LLM
-        # （LLM 摘要由 profile_service.get(ensure_llm=True) 惰性补生成）
-        profile = profile_service.rebuild_profile(user)
+        def _write():
+            if feedback == "undo":
+                UserFeedback.objects.filter(user=user, track_id=track_id).delete()
+            else:
+                UserFeedback.objects.update_or_create(
+                    user=user,
+                    track_id=track_id,
+                    defaults={
+                        "track_name": data.get("track_name", ""),
+                        "artist_name": data.get("artist_name", ""),
+                        "artist_genres": data.get("artist_genres", ""),
+                        "feedback": feedback,
+                        "artist_idx": int(data.get("artist_idx") or 0),
+                        "artist_genre_idx": int(data.get("artist_genre_idx") or 0),
+                    },
+                )
+
+            # 重算画像：纯统计 + 时间衰减，毫秒级，不调 LLM
+            # （LLM 摘要由 profile_service.get(ensure_llm=True) 惰性补生成）
+            # 注意：rebuild_profile 也要落库，所以必须放进重试范围
+            return profile_service.rebuild_profile(user)
+
+        profile = with_retry(_write)()
 
         return JsonResponse({
             "status": "ok",
@@ -391,6 +433,45 @@ def feedback_api(request):
         })
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
+
+
+
+# ===================== 歌单导入 API =====================
+@csrf_exempt
+def import_playlist_api(request):
+    """
+    从网易云/QQ音乐等平台导入歌单，写入用户偏好。
+
+    POST JSON: {"playlist": "3778678 或分享链接", "platform": "netease", "limit": 200}
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+
+    try:
+        data = json.loads(request.body or "{}")
+    except Exception:
+        return JsonResponse({"error": "JSON 解析失败"}, status=400)
+
+    raw = (data.get("playlist") or data.get("url") or data.get("id") or "").strip()
+    if not raw:
+        return JsonResponse({"error": "请提供歌单 ID 或链接"}, status=400)
+
+    limit = safe_int(data.get("limit"), default=200, lo=1, hi=500)
+    platform = (data.get("platform") or "").strip() or None
+    if platform and platform not in ("netease", "tencent", "kugou", "kuwo"):
+        return JsonResponse({"error": f"不支持的平台: {platform}"}, status=400)
+
+    try:
+        from webtest.playlist_import import import_playlist
+        result = import_playlist(
+            request.user, raw, platform=platform, limit=limit,
+            overwrite=bool(data.get("overwrite")))
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+    if not result.get("ok"):
+        return JsonResponse(result, status=400)
+    return JsonResponse(result)
 
 
 def feedback_list_api(request):

@@ -1,12 +1,51 @@
 # webtest/embeat_similar.py
 
+import re
+
 import requests
 import numpy as np
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qdrant_models
 
 
+DUP_VERSION_MARKERS = (
+    "remix", "remaster", "remastered", "re-recorded", "rerecorded",
+    "live", "deluxe", "anniversary", "edition", "version",
+    "radio edit", "single edit", "album edit", "extended mix",
+    "instrumental", "acoustic version", "demo", "reprise",
+    "sped up", "slowed", "tiktok", "bonus track",
+)
+
+
+def _is_dup_version(track_name_lower):
+    """
+    判断这是否为"同一首歌的重复版本"（Remaster/Live/Deluxe/Edit...）。
+
+    为什么要挡：库里同一首歌有大量副本，且**向量完全相同**
+    （实测 Bohemian Rhapsody 的 - Remaster 副本 raw cos = 1.000000），
+    不挡的话推荐位会被同一首歌的多个版本刷屏。
+    注意用括号/短横线限定的形式匹配，避免误伤歌名本身就含这些词的原创曲
+    （如 "Live and Let Die"）——所以只匹配出现在括号或 " - " 之后的情形。
+    """
+    if not track_name_lower:
+        return False
+    name = str(track_name_lower).lower()
+
+    # 只在括号内 / " - " 之后 / 结尾处找标记，降低误伤
+    segments = []
+    segments += re.findall(r"\(([^)]*)\)", name)      # (Remastered 2011)
+    segments += re.findall(r"\[([^\]]*)\]", name)     # [Live]
+    if " - " in name:
+        segments.append(name.split(" - ", 1)[1])      # Xxx - Remaster
+    for seg in segments:
+        for m in DUP_VERSION_MARKERS:
+            if m in seg:
+                return True
+    return False
+
+
 class EmbeatSimilar:
+
     """只实现 Embeat 的声学相似一路召回"""
 
     def __init__(
@@ -23,6 +62,21 @@ class EmbeatSimilar:
             port=6333,
             timeout=qdrant_timeout,
         )
+        # 去均值校准用的全库均值向量（懒加载，失败则置 None 表示不校凇）
+        self._mu_vec = None
+        self._calibration_ready = False
+
+    def _ensure_calibration(self):
+        """首次调用时加载均值向量；失败不抛错，只是关闭校准。"""
+        if self._calibration_ready:
+            return
+        self._calibration_ready = True
+        try:
+            from .vector_calibration import get_mean_vec
+            self._mu_vec = get_mean_vec()
+        except Exception as e:
+            print(f"[校准] 不可用，跳过: {e}")
+            self._mu_vec = None
 
     # ========== 1. 查找种子歌曲 ==========
     def find_seed(self, track_id="", isrc="", track_name="", artist_name=""):
@@ -210,7 +264,7 @@ class EmbeatSimilar:
                 query_filter=query_filter,
                 limit=candidate_limit,
                 with_payload=True,
-                with_vectors=False,
+                with_vectors=True,   # 需要向量才能算去均值校准相似度
             )
         except Exception as e:
             print(f"[错误] 向量搜索失败: {e}")
@@ -227,7 +281,8 @@ class EmbeatSimilar:
             return set()
         return {g.strip().lower() for g in genre_str.split(",") if g.strip()}
 
-    def filter_candidates(self, seed_payload, candidates, top_k=20):
+    def filter_candidates(self, seed_payload, candidates, top_k=20, seed_center=None):
+
         """
         过滤候选：
         - 种子有流派：要求候选流派有交集，idx 相同加高分
@@ -265,6 +320,21 @@ class EmbeatSimilar:
             payload_popularity = float(payload.get("popularity") or 0.0)
             payload_similarity = float(candidate.score)
 
+            # 原始余弦被"全正向量常数基线"抬到 ~0.986（随机也有这么高），
+            # 不能读作相似度。这里额外算一个去均值后的校准值 _cal_sim，
+            # 它才是可解释的（随机≈0，推荐≈0.2~0.8）。用途见 vector_calibration.py
+            _cal_sim = None
+            if (self._mu_vec is not None and seed_center is not None
+                    and getattr(candidate, "vector", None)):
+                try:
+                    from .vector_calibration import calibrated_cos
+                    _cal_sim = calibrated_cos(candidate.vector, seed_center,
+                                              self._mu_vec)
+                except Exception:
+                    _cal_sim = None
+
+
+
             # --- 基础过滤 ---
             if not payload_track_id or not payload_track_name:
                 continue
@@ -272,7 +342,12 @@ class EmbeatSimilar:
                 continue
             if payload_track_name == seed_track_name and payload_artist_name == seed_artist_name:
                 continue
-            if "remix" in payload_track_name:
+            # 过滤重复版本（原实现只挡 remix，导致 Remaster/Live/Deluxe
+            # 等副本挤占推荐位。实测 Bohemian Rhapsody 前 15 个候选全是
+            # 它自己的 - Remaster 副本，向量完全相同）
+            # 注意：必须用**原始**歌名判断 —— 下一行的 payload_track_name
+            # 会把 " - xxx" 和 "(xxx)" 截掉，截完就认不出 Remaster 了。
+            if _is_dup_version(payload.get("track_name") or ""):
                 continue
             if payload_popularity < min_popularity:
                 continue
@@ -312,27 +387,41 @@ class EmbeatSimilar:
                 "artist_genre_idx": payload_genre_idx,
                 "popularity": payload_popularity,
                 "similarity": round(payload_similarity, 4),
+                "cal_similarity": round(_cal_sim, 4) if _cal_sim is not None else None,
+
                 "genre_bonus": round(genre_bonus, 4),
                 "final_score": round(final_score, 4),
                 "payload_track_name": payload_track_name,
                 "payload_artist_name": payload_artist_name,
+                # 供 ranking.diversity_rerank 的 MMR 算相似度惩罚项。
+                # 原实现没带这个字段，导致 MMR 的 penalty 恒为 0（退化成
+                # "只有硬约束的贪婪选择"）；带上后 MMR 才真正生效。
+                "_vector": ([float(x) for x in candidate.vector]
+                            if getattr(candidate, "vector", None) else None),
             })
+
 
         # 按最终分数排序
         candidates_scored.sort(key=lambda x: x["final_score"], reverse=True)
 
         # 去重 + 同歌手限制
+        # 原实现只对"种子歌手本人"限流（`== seed_artist_name`），其它歌手
+        # 可无限重复，导致如 Bohemian Rhapsody 的结果里 Queen/David Bowie
+        # 各占 3~4 席。这里改为对**所有歌手**一视同仁限流。
         result = []
         result_track_names = set()
+        artist_seen = {}
+
         for item in candidates_scored:
             if item["payload_track_name"] in result_track_names:
                 continue
-            if item["payload_artist_name"] == seed_artist_name:
-                if same_artist_counter >= max_same_artist:
-                    continue
-                same_artist_counter += 1
+
+            artist = item["payload_artist_name"]
+            if artist_seen.get(artist, 0) >= max_same_artist:
+                continue
 
             result_track_names.add(item["payload_track_name"])
+            artist_seen[artist] = artist_seen.get(artist, 0) + 1
             result.append(item)
             if len(result) >= top_k:
                 break
@@ -366,9 +455,19 @@ class EmbeatSimilar:
         if seed_vector is None:
             return {"error": "种子向量为空"}
 
+        # 校准：加载均值向量，并算出种子的"去均值中心向量"
+        self._ensure_calibration()
+        _seed_center = None
+        if self._mu_vec is not None:
+            try:
+                from .vector_calibration import center as _center
+                _seed_center = _center(seed_vector, self._mu_vec)
+            except Exception:
+                _seed_center = None
+
         # 2. 确定流派
         seed_artist_genre_idx = int(seed_payload.get("artist_genre_idx") or 0)
-
+  
         # 3. 声学相似召回
         candidate_limit = max(1, min(int(top_k * 10), 512))
         candidates = self.search_similar(
@@ -382,7 +481,9 @@ class EmbeatSimilar:
             seed_payload=seed_payload,
             candidates=candidates,
             top_k=top_k,
+            seed_center=_seed_center,
         )
+
 
         return {
             "seed": {
